@@ -6,32 +6,65 @@
   <title>สแกน QR</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
-    body { font-family: sans-serif; margin:0; background:#000; }
+    body { font-family: sans-serif; margin:0; background:#000; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }
     #reader { width:100%; }
     #status { color:#fff; text-align:center; padding:12px; font-size:16px; }
+    button { background:#4285f4; color:#fff; border:none; padding:16px 32px; font-size:18px; border-radius:8px; margin-top:12px; }
+    button:disabled { background:#888; }
   </style>
 </head>
 <body>
-  <div id="status">จ่อกล้องไปที่ QR Code...</div>
-  <div id="reader"></div>
+  <div id="status">แตะปุ่มด้านล่างเพื่อเปิดกล้อง</div>
+  <button id="startBtn">📷 เริ่มสแกน</button>
+  <button id="retryBtn" style="display:none;">🔄 ลองใหม่</button>
+  <div id="reader" style="display:none;"></div>
   <script>
     const params = new URLSearchParams(window.location.search);
     const fieldId = params.get('field') || '';
+    let html5QrCode = null;
+    let isScanning = false;
 
-    const html5QrCode = new Html5Qrcode("reader");
-    html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      (decodedText) => {
-        document.getElementById('status').innerText = 'สำเร็จ: ' + decodedText;
-        if (window.opener) {
-          window.opener.postMessage({ field: fieldId, value: decodedText }, '*');
-        }
-        html5QrCode.stop().then(() => window.close());
-      },
-      () => {}
-    ).catch(err => {
-      document.getElementById('status').innerText = 'เปิดกล้องไม่ได้: ' + err;
+    function stopCamera() {
+      if (html5QrCode && isScanning) {
+        isScanning = false;
+        return html5QrCode.stop().catch(() => {});
+      }
+      return Promise.resolve();
+    }
+
+    function startCamera() {
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('retryBtn').style.display = 'none';
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('status').innerText = 'กำลังเปิดกล้อง...';
+
+      html5QrCode = new Html5Qrcode("reader");
+      isScanning = true;
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+          document.getElementById('status').innerText = 'สำเร็จ: ' + decodedText;
+          if (window.opener) {
+            window.opener.postMessage({ field: fieldId, value: decodedText }, '*');
+          }
+          stopCamera().then(() => window.close());
+        },
+        () => {}
+      ).catch(err => {
+        isScanning = false;
+        document.getElementById('status').innerText = 'เปิดกล้องไม่ได้: ' + err;
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('retryBtn').style.display = 'inline-block';
+      });
+    }
+
+    document.getElementById('startBtn').addEventListener('click', startCamera);
+    document.getElementById('retryBtn').addEventListener('click', startCamera);
+
+    window.addEventListener('pagehide', stopCamera);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopCamera();
     });
   </script>
 </body>
