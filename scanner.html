@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>สแกน QR</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin:0; background:#000; }
+    #reader { width:100%; }
+    #status { color:#fff; text-align:center; padding:12px; font-size:16px; }
+  </style>
+</head>
+<body>
+  <div id="status">จ่อกล้องไปที่ QR Code...</div>
+  <div id="reader"></div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const fieldId = params.get('field') || '';
+
+    const html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (decodedText) => {
+        document.getElementById('status').innerText = 'สำเร็จ: ' + decodedText;
+        if (window.opener) {
+          window.opener.postMessage({ field: fieldId, value: decodedText }, '*');
+        }
+        html5QrCode.stop().then(() => window.close());
+      },
+      () => {}
+    ).catch(err => {
+      document.getElementById('status').innerText = 'เปิดกล้องไม่ได้: ' + err;
+    });
+  </script>
+</body>
+</html>
