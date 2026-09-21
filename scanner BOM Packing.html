@@ -10,34 +10,41 @@
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --ink: #1d2733; --muted: #6b7684;
-    --line: #e2e6ea; --accent: #1a5fb4; --badge: #e8ebef; --err: #b42318;
+    --line: #e2e6ea; --accent: #1a5fb4; --badge: #e8ebef; --err: #b42318; --on: #e8f0fb;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font-family: "Noto Sans Thai", system-ui, sans-serif; font-size: 16px;
-  }
-  header {
-    position: sticky; top: 0; z-index: 5; background: var(--card);
-    border-bottom: 1px solid var(--line); padding: 10px 12px;
-  }
-  form { display: flex; gap: 8px; max-width: 720px; margin: 0 auto; }
-  input {
-    flex: 1; min-width: 0; padding: 10px 12px; font: inherit;
-    border: 1px solid var(--line); border-radius: 8px; background: #fff;
-  }
-  button {
-    font: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer;
-    border: 1px solid var(--accent); background: var(--accent); color: #fff;
-  }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans Thai", system-ui, sans-serif; font-size: 16px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--card);
+    border-bottom: 1px solid var(--line); padding: 10px 12px; }
+  form { display: flex; gap: 8px; max-width: 1000px; margin: 0 auto; }
+  input { flex: 1; min-width: 0; padding: 10px 12px; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  button { font: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; }
   button.ghost { background: #fff; color: var(--accent); }
   button:focus-visible, input:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 1px; }
-  #reader-wrap { max-width: 720px; margin: 12px auto 0; padding: 0 12px; }
-  #reader { width: 100%; border-radius: 8px; overflow: hidden; background: #000; }
-  #stop { width: 100%; margin-top: 8px; }
-  main { max-width: 720px; margin: 0 auto; padding: 12px; }
-  .msg { color: var(--muted); padding: 24px 4px; text-align: center; }
+
+  #reader-wrap { max-width: 1000px; margin: 12px auto 0; padding: 0 12px; }
+  #reader { width: 100%; max-width: 480px; border-radius: 8px; overflow: hidden; background: #000; }
+  #stop { margin-top: 8px; }
+
+  /* ส่วนที่ 1 = รายการ FG (ซ้าย)  ส่วนที่ 2 = ไส้ใน FG (ขวา) */
+  #app { max-width: 1000px; margin: 0 auto; padding: 12px; display: grid;
+    grid-template-columns: 280px 1fr; gap: 12px; align-items: start; }
+  #list { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    overflow-y: auto; max-height: calc(100vh - 92px); }
+  .row { display: block; width: 100%; text-align: left; background: #fff; color: var(--ink);
+    border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 14px; }
+  .row:last-child { border-bottom: 0; }
+  .row b { display: block; font-weight: 600; }
+  .row span { color: var(--muted); font-size: 14px; }
+  .row.on { background: var(--on); box-shadow: inset 3px 0 0 var(--accent); }
+
+  .msg { color: var(--muted); padding: 24px 12px; text-align: center; }
   .msg.err { color: var(--err); }
+  .back { display: none; margin-bottom: 10px; }
+
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
   .field + .field { margin-top: 12px; }
   .label { font-size: 13px; color: var(--muted); }
@@ -50,13 +57,21 @@
   th { font-weight: 600; white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
   td.num, th.num { text-align: right; }
+
+  @media (max-width: 719px) {
+    #app { grid-template-columns: 1fr; }
+    #list { max-height: none; }
+    #app.has-detail #list { display: none; }
+    #app:not(.has-detail) #detail { display: none; }
+    .back { display: inline-block; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <form id="form">
-    <input id="q" type="search" inputmode="text" placeholder="สแกนหรือพิมพ์ FG code" autocomplete="off">
+    <input id="q" type="search" placeholder="สแกนหรือพิมพ์ FG code" autocomplete="off">
     <button type="button" id="scan" class="ghost">สแกน</button>
     <button type="submit">ค้นหา</button>
   </form>
@@ -67,45 +82,84 @@
   <button type="button" id="stop" class="ghost">ยกเลิกสแกน</button>
 </div>
 
-<main id="result">
-  <div class="msg">กดสแกนหรือพิมพ์ FG code เพื่อค้นหา</div>
-</main>
+<div id="app">
+  <div id="list"><div class="msg">กำลังโหลดรายการ…</div></div>
+  <section id="detail"><div class="msg">เลือก FG จากรายการเพื่อดูไส้ใน</div></section>
+</div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
-  const API_URL = "https://script.google.com/macros/s/AKfycbwoKmgi7YWr16z1-q6UyXrJt_3yG0WCV-lTGn9pwtuxjWpz7RteQ0gyqYL1DL_qbfbnhA/exec";
+  const API_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
 
   const $ = (id) => document.getElementById(id);
-  const q = $("q"), result = $("result"), wrap = $("reader-wrap");
+  const q = $("q"), app = $("app"), listEl = $("list"), detail = $("detail"), wrap = $("reader-wrap");
+  let all = [];            // รายการ FG ทั้งหมด
+  let selected = "";       // FG code ที่เลือกอยู่
+  const cache = new Map(); // เก็บไส้ในที่เคยโหลดแล้ว
   let scanner = null;
 
   // ตัดข้อความหลัง "::" ออก  เช่น 3-01-10001::TS.. -> 3-01-10001
   const clean = (raw) => String(raw).split("::")[0].trim();
-
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const msg = (t, err) => `<div class="msg${err ? " err" : ""}">${esc(t)}</div>`;
 
-  const show = (text, isErr) => {
-    result.innerHTML = `<div class="msg${isErr ? " err" : ""}">${esc(text)}</div>`;
-  };
+  async function api(params) {
+    const res = await fetch(API_URL + "?" + new URLSearchParams(params));
+    return res.json();
+  }
 
-  async function search(raw) {
-    const code = clean(raw);
-    if (!code) return;
-    q.value = code;
-    show("กำลังค้นหา…");
+  // ---------- ส่วนที่ 1: รายการ FG ----------
+  async function loadList() {
     try {
-      const res = await fetch(API_URL + "?code=" + encodeURIComponent(code));
-      render(await res.json());
+      const d = await api({ action: "list" });
+      if (!d.ok) throw new Error(d.error);
+      all = d.items;
+      renderList();
     } catch (err) {
-      show("เชื่อมต่อไม่ได้ ตรวจ API_URL และการ Deploy อีกครั้ง", true);
+      listEl.innerHTML = msg("โหลดรายการไม่ได้ ตรวจ API_URL และการ Deploy", true);
     }
   }
 
-  function render(d) {
-    if (!d.ok) return show(d.error || "เกิดข้อผิดพลาด", true);
-    if (!d.found) return show(`ไม่พบ FG code: ${d.code}`, true);
+  function renderList() {
+    const k = clean(q.value).toUpperCase();
+    const rows = all.filter((r) => !k || (r.code + " " + r.model).toUpperCase().includes(k));
+    listEl.innerHTML = rows.length
+      ? rows.map((r) => `
+          <button type="button" class="row${r.code === selected ? " on" : ""}" data-code="${esc(r.code)}">
+            <b>${esc(r.code)}</b><span>${esc(r.model)}</span>
+          </button>`).join("")
+      : msg("ไม่พบรายการ");
+    const on = listEl.querySelector(".on");
+    if (on) on.scrollIntoView({ block: "nearest" });
+  }
+
+  listEl.addEventListener("click", (e) => {
+    const b = e.target.closest(".row");
+    if (b) select(b.dataset.code);
+  });
+
+  // ---------- ส่วนที่ 2: ไส้ใน FG (แสดงเมื่อเลือกจากส่วนที่ 1) ----------
+  async function select(code) {
+    selected = code;
+    renderList();
+    app.classList.add("has-detail");
+    if (cache.has(code)) return renderDetail(cache.get(code));
+    detail.innerHTML = msg("กำลังโหลด…");
+    try {
+      const d = await api({ code });
+      if (d.ok && d.found) cache.set(code, d);
+      if (selected === code) renderDetail(d);
+    } catch (err) {
+      if (selected === code) detail.innerHTML = msg("เชื่อมต่อไม่ได้ ตรวจ API_URL และการ Deploy", true);
+    }
+  }
+
+  function renderDetail(d) {
+    const back = `<button type="button" id="back" class="ghost back">‹ กลับไปรายการ</button>`;
+    if (!d.ok) return (detail.innerHTML = back + msg(d.error || "เกิดข้อผิดพลาด", true));
+    if (!d.found) return (detail.innerHTML = back + msg(`ไม่พบ FG code: ${d.code}`, true));
 
     const rows = d.items.map((it) => `
       <tr>
@@ -115,7 +169,7 @@
         <td class="num">${esc(it.useQty)}</td>
       </tr>`).join("");
 
-    result.innerHTML = `
+    detail.innerHTML = back + `
       <div class="card">
         <div class="field"><div class="label">FG code</div><div class="value">${esc(d.fg.code)}</div></div>
         <div class="field"><div class="label">Line</div><div class="value">${esc(d.fg.line)}</div></div>
@@ -130,17 +184,32 @@
       </div>`;
   }
 
+  detail.addEventListener("click", (e) => {
+    if (e.target.id === "back") app.classList.remove("has-detail");
+  });
+
+  // ---------- ค้นหา / สแกน ----------
+  function search(raw) {
+    const code = clean(raw);
+    q.value = code;
+    renderList();
+    if (!code) return;
+    const key = code.toUpperCase();
+    const hit = all.find((r) => r.code.toUpperCase() === key);
+    if (hit) return select(hit.code);
+    const only = all.filter((r) => (r.code + " " + r.model).toUpperCase().includes(key));
+    if (only.length === 1) select(only[0].code);
+  }
+
   async function startScan() {
     if (scanner) return;
     wrap.hidden = false;
-    scanner = new Html5Qrcode("reader", {
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-    });
+    scanner = new Html5Qrcode("reader", { experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
     try {
       await scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan, () => {});
     } catch (err) {
       await stopScan();
-      show("เปิดกล้องไม่ได้ ตรวจสิทธิ์กล้องของเบราว์เซอร์", true);
+      listEl.innerHTML = msg("เปิดกล้องไม่ได้ ตรวจสิทธิ์กล้องของเบราว์เซอร์", true);
     }
   }
 
@@ -153,7 +222,7 @@
   }
 
   function onScan(text) {
-    if (!scanner) return;          // กันเรียกซ้ำหลังสแกนได้แล้ว
+    if (!scanner) return;
     if (navigator.vibrate) navigator.vibrate(80);
     stopScan();
     search(text);
@@ -162,6 +231,9 @@
   $("scan").addEventListener("click", startScan);
   $("stop").addEventListener("click", stopScan);
   $("form").addEventListener("submit", (e) => { e.preventDefault(); search(q.value); });
+  q.addEventListener("input", renderList);
+
+  loadList();
 </script>
 </body>
 </html>
