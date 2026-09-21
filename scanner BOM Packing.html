@@ -157,7 +157,12 @@
   // ส่งแบบ POST ไม่ตั้ง header เพื่อให้เป็น simple request (ไม่ติด CORS preflight ของ Apps Script)
   async function post(body) {
     const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
-    return res.json();
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (HTTP " + res.status + "): " + text.replace(/\s+/g, " ").slice(0, 120));
+    }
   }
 
   // ---------- Login / Logout ----------
@@ -187,7 +192,7 @@
         loadAll();
       }
     } catch (err) {
-      showLoginMsg("เชื่อมต่อไม่ได้ ตรวจ API_URL และการ Deploy");
+      showLoginMsg("เชื่อมต่อไม่ได้: " + err.message);
     }
     btn.disabled = false;
     btn.textContent = "เข้าสู่ระบบ";
@@ -211,7 +216,7 @@
   $("logout").addEventListener("click", () => logout("", true));
 
   // ---------- โหลดข้อมูลทั้งหมดรอบเดียว ----------
-  async function loadAll() {
+  async function loadAll(attempt = 1) {
     try {
       const d = await post({ action: "all", token });
       if (d.needLogin) return logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่", false);
@@ -222,7 +227,9 @@
       renderList();
       if (pending !== null) { const p = pending; pending = null; search(p); }
     } catch (err) {
-      listEl.innerHTML = msg("โหลดข้อมูลไม่ได้ ตรวจ API_URL และการ Deploy", true);
+      if (attempt < 2) return setTimeout(() => loadAll(2), 1500); // ลองซ้ำอัตโนมัติ 1 ครั้ง
+      listEl.innerHTML = msg("โหลดข้อมูลไม่ได้: " + err.message, true) +
+        `<div class="msg"><button type="button" id="retry">ลองใหม่</button></div>`;
     }
   }
 
@@ -241,6 +248,7 @@
   }
 
   listEl.addEventListener("click", (e) => {
+    if (e.target.id === "retry") { listEl.innerHTML = msg("กำลังโหลดข้อมูล…"); return loadAll(); }
     const b = e.target.closest(".row");
     if (b) select(b.dataset.code);
   });
