@@ -83,20 +83,22 @@
 </div>
 
 <div id="app">
-  <div id="list"><div class="msg">กำลังโหลดรายการ…</div></div>
+  <div id="list"><div class="msg">กำลังโหลดข้อมูล…</div></div>
   <section id="detail"><div class="msg">เลือก FG จากรายการเพื่อดู BOM Packing</div></section>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
-  const API_URL = "https://script.google.com/macros/s/AKfycbwoKmgi7YWr16z1-q6UyXrJt_3yG0WCV-lTGn9pwtuxjWpz7RteQ0gyqYL1DL_qbfbnhA/exec";
+  const API_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
 
   const $ = (id) => document.getElementById(id);
   const q = $("q"), app = $("app"), listEl = $("list"), detail = $("detail"), wrap = $("reader-wrap");
   let all = [];            // รายการ FG ทั้งหมด
+  let bom = {};            // FG code (ตัวพิมพ์ใหญ่) -> [[Item Number, Product Name, Unit, Use Qty], ...]
+  let ready = false;       // โหลดข้อมูลครบแล้วหรือยัง
+  let pending = null;      // ค่าที่สแกน/พิมพ์ก่อนโหลดเสร็จ
   let selected = "";       // FG code ที่เลือกอยู่
-  const cache = new Map(); // เก็บไส้ในที่เคยโหลดแล้ว
   let scanner = null;
 
   // ตัดข้อความหลัง "::" ออก  เช่น 3-01-10001::TS.. -> 3-01-10001
@@ -105,23 +107,23 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const msg = (t, err) => `<div class="msg${err ? " err" : ""}">${esc(t)}</div>`;
 
-  async function api(params) {
-    const res = await fetch(API_URL + "?" + new URLSearchParams(params));
-    return res.json();
-  }
-
-  // ---------- ส่วนที่ 1: รายการ FG ----------
-  async function loadList() {
+  // ---------- โหลดข้อมูลทั้งหมดรอบเดียว ----------
+  async function loadAll() {
     try {
-      const d = await api({ action: "list" });
+      const res = await fetch(API_URL + "?action=all");
+      const d = await res.json();
       if (!d.ok) throw new Error(d.error);
-      all = d.items;
+      all = d.fg;
+      bom = d.bom;
+      ready = true;
       renderList();
+      if (pending !== null) { const p = pending; pending = null; search(p); }
     } catch (err) {
-      listEl.innerHTML = msg("โหลดรายการไม่ได้ ตรวจ API_URL และการ Deploy", true);
+      listEl.innerHTML = msg("โหลดข้อมูลไม่ได้ ตรวจ API_URL และการ Deploy", true);
     }
   }
 
+  // ---------- ส่วนที่ 1: รายการ FG ----------
   function renderList() {
     const k = clean(q.value).toUpperCase();
     const rows = all.filter((r) => !k || (r.code + " " + r.model).toUpperCase().includes(k));
@@ -140,42 +142,35 @@
     if (b) select(b.dataset.code);
   });
 
-  // ---------- ส่วนที่ 2: ไส้ใน FG (แสดงเมื่อเลือกจากส่วนที่ 1) ----------
-  async function select(code) {
+  // ---------- ส่วนที่ 2: BOM Packing ของ FG (แสดงเมื่อเลือกจากส่วนที่ 1) ----------
+  function select(code) {
     selected = code;
     renderList();
     app.classList.add("has-detail");
-    if (cache.has(code)) return renderDetail(cache.get(code));
-    detail.innerHTML = msg("กำลังโหลด…");
-    try {
-      const d = await api({ code });
-      if (d.ok && d.found) cache.set(code, d);
-      if (selected === code) renderDetail(d);
-    } catch (err) {
-      if (selected === code) detail.innerHTML = msg("เชื่อมต่อไม่ได้ ตรวจ API_URL และการ Deploy", true);
-    }
+    renderDetail(code);
   }
 
-  function renderDetail(d) {
+  function renderDetail(code) {
     const back = `<button type="button" id="back" class="ghost back">‹ กลับไปรายการ</button>`;
-    if (!d.ok) return (detail.innerHTML = back + msg(d.error || "เกิดข้อผิดพลาด", true));
-    if (!d.found) return (detail.innerHTML = back + msg(`ไม่พบ FG code: ${d.code}`, true));
+    const fg = all.find((r) => r.code === code);
+    if (!fg) return (detail.innerHTML = back + msg(`ไม่พบ FG code: ${code}`, true));
+    const items = bom[code.toUpperCase()] || [];
 
-    const rows = d.items.map((it) => `
+    const rows = items.map(([no, name, unit, qty]) => `
       <tr>
-        <td>${esc(it.itemNumber)}</td>
-        <td>${esc(it.productName)}</td>
-        <td>${esc(it.unit)}</td>
-        <td class="num">${esc(it.useQty)}</td>
+        <td>${esc(no)}</td>
+        <td>${esc(name)}</td>
+        <td>${esc(unit)}</td>
+        <td class="num">${esc(qty)}</td>
       </tr>`).join("");
 
     detail.innerHTML = back + `
       <div class="card">
-        <div class="field"><div class="label">FG code</div><div class="value">${esc(d.fg.code)}</div></div>
-        <div class="field"><div class="label">Line</div><div class="value">${esc(d.fg.line)}</div></div>
-        <div class="field"><div class="label">FG Model</div><div class="value">${esc(d.fg.model)}</div></div>
+        <div class="field"><div class="label">FG code</div><div class="value">${esc(fg.code)}</div></div>
+        <div class="field"><div class="label">Line</div><div class="value">${esc(fg.line)}</div></div>
+        <div class="field"><div class="label">FG Model</div><div class="value">${esc(fg.model)}</div></div>
       </div>
-      <div class="rel">Related BOM_Packing_Uses <span class="badge">${d.items.length}</span></div>
+      <div class="rel">Related BOM_Packing_Uses <span class="badge">${items.length}</span></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Item Number</th><th>Product Name</th><th>Unit</th><th class="num">Use Qty</th></tr></thead>
@@ -190,6 +185,7 @@
 
   // ---------- ค้นหา / สแกน ----------
   function search(raw) {
+    if (!ready) { pending = raw; q.value = clean(raw); return; }
     const code = clean(raw);
     q.value = code;
     renderList();
@@ -233,7 +229,7 @@
   $("form").addEventListener("submit", (e) => { e.preventDefault(); search(q.value); });
   q.addEventListener("input", renderList);
 
-  loadList();
+  loadAll();
 </script>
 </body>
 </html>
