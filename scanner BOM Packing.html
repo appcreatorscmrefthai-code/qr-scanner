@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ค้นหา BOM Packing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1d2733; --muted: #6b7684;
+    --line: #e2e6ea; --accent: #1a5fb4; --badge: #e8ebef; --err: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans Thai", system-ui, sans-serif; font-size: 16px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--card);
+    border-bottom: 1px solid var(--line); padding: 10px 12px;
+  }
+  form { display: flex; gap: 8px; max-width: 720px; margin: 0 auto; }
+  input {
+    flex: 1; min-width: 0; padding: 10px 12px; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  }
+  button {
+    font: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  button.ghost { background: #fff; color: var(--accent); }
+  button:focus-visible, input:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 1px; }
+  #reader-wrap { max-width: 720px; margin: 12px auto 0; padding: 0 12px; }
+  #reader { width: 100%; border-radius: 8px; overflow: hidden; background: #000; }
+  #stop { width: 100%; margin-top: 8px; }
+  main { max-width: 720px; margin: 0 auto; padding: 12px; }
+  .msg { color: var(--muted); padding: 24px 4px; text-align: center; }
+  .msg.err { color: var(--err); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .field + .field { margin-top: 12px; }
+  .label { font-size: 13px; color: var(--muted); }
+  .value { font-size: 22px; }
+  .rel { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; font-size: 14px; color: var(--muted); }
+  .badge { background: var(--badge); color: var(--ink); border-radius: 6px; padding: 1px 8px; font-weight: 600; }
+  .table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 480px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; }
+</style>
+</head>
+<body>
+
+<header>
+  <form id="form">
+    <input id="q" type="search" inputmode="text" placeholder="สแกนหรือพิมพ์ FG code" autocomplete="off">
+    <button type="button" id="scan" class="ghost">สแกน</button>
+    <button type="submit">ค้นหา</button>
+  </form>
+</header>
+
+<div id="reader-wrap" hidden>
+  <div id="reader"></div>
+  <button type="button" id="stop" class="ghost">ยกเลิกสแกน</button>
+</div>
+
+<main id="result">
+  <div class="msg">กดสแกนหรือพิมพ์ FG code เพื่อค้นหา</div>
+</main>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
+  const API_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
+
+  const $ = (id) => document.getElementById(id);
+  const q = $("q"), result = $("result"), wrap = $("reader-wrap");
+  let scanner = null;
+
+  // ตัดข้อความหลัง "::" ออก  เช่น 3-01-10001::TS.. -> 3-01-10001
+  const clean = (raw) => String(raw).split("::")[0].trim();
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const show = (text, isErr) => {
+    result.innerHTML = `<div class="msg${isErr ? " err" : ""}">${esc(text)}</div>`;
+  };
+
+  async function search(raw) {
+    const code = clean(raw);
+    if (!code) return;
+    q.value = code;
+    show("กำลังค้นหา…");
+    try {
+      const res = await fetch(API_URL + "?code=" + encodeURIComponent(code));
+      render(await res.json());
+    } catch (err) {
+      show("เชื่อมต่อไม่ได้ ตรวจ API_URL และการ Deploy อีกครั้ง", true);
+    }
+  }
+
+  function render(d) {
+    if (!d.ok) return show(d.error || "เกิดข้อผิดพลาด", true);
+    if (!d.found) return show(`ไม่พบ FG code: ${d.code}`, true);
+
+    const rows = d.items.map((it) => `
+      <tr>
+        <td>${esc(it.itemNumber)}</td>
+        <td>${esc(it.productName)}</td>
+        <td>${esc(it.unit)}</td>
+        <td class="num">${esc(it.useQty)}</td>
+      </tr>`).join("");
+
+    result.innerHTML = `
+      <div class="card">
+        <div class="field"><div class="label">FG code</div><div class="value">${esc(d.fg.code)}</div></div>
+        <div class="field"><div class="label">Line</div><div class="value">${esc(d.fg.line)}</div></div>
+        <div class="field"><div class="label">FG Model</div><div class="value">${esc(d.fg.model)}</div></div>
+      </div>
+      <div class="rel">Related BOM_Packing_Uses <span class="badge">${d.items.length}</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item Number</th><th>Product Name</th><th>Unit</th><th class="num">Use Qty</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="4" class="msg">ไม่มีรายการ BOM</td></tr>`}</tbody>
+        </table>
+      </div>`;
+  }
+
+  async function startScan() {
+    if (scanner) return;
+    wrap.hidden = false;
+    scanner = new Html5Qrcode("reader", {
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    });
+    try {
+      await scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan, () => {});
+    } catch (err) {
+      await stopScan();
+      show("เปิดกล้องไม่ได้ ตรวจสิทธิ์กล้องของเบราว์เซอร์", true);
+    }
+  }
+
+  async function stopScan() {
+    if (!scanner) return;
+    const s = scanner;
+    scanner = null;
+    try { await s.stop(); s.clear(); } catch (e) {}
+    wrap.hidden = true;
+  }
+
+  function onScan(text) {
+    if (!scanner) return;          // กันเรียกซ้ำหลังสแกนได้แล้ว
+    if (navigator.vibrate) navigator.vibrate(80);
+    stopScan();
+    search(text);
+  }
+
+  $("scan").addEventListener("click", startScan);
+  $("stop").addEventListener("click", stopScan);
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); search(q.value); });
+</script>
+</body>
+</html>
