@@ -23,19 +23,34 @@
     font-family: "Noto Sans Thai", system-ui, sans-serif; font-size: 16px; }
   header { position: sticky; top: 0; z-index: 5; background: var(--card);
     border-bottom: 1px solid var(--line); padding: 10px 12px; }
-  form { display: flex; gap: 8px; max-width: 1000px; margin: 0 auto; }
+  #form { display: flex; gap: 8px; max-width: 1000px; margin: 0 auto; }
   input { flex: 1; min-width: 0; padding: 10px 12px; font: inherit;
     border: 1px solid var(--line); border-radius: 8px; background: #fff; }
   button { font: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer;
     border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+  button:disabled { opacity: .6; cursor: default; }
   button.ghost { background: #fff; color: var(--accent); }
   button:focus-visible, input:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 1px; }
+
+  /* หน้า Login: ซ่อนข้อมูลทั้งหมดจนกว่าจะเข้าสู่ระบบ */
+  body:not(.authed) header,
+  body:not(.authed) #reader-wrap,
+  body:not(.authed) #app { display: none; }
+  body.authed #login { display: none; }
+  #login { max-width: 360px; margin: 10vh auto 0; padding: 0 16px; text-align: center; }
+  #login img { width: 72px; height: 72px; }
+  #login h1 { font-size: 22px; margin: 8px 0 16px; }
+  #loginForm { text-align: left; }
+  #loginForm label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  #loginForm input { display: block; width: 100%; margin-top: 4px; font-size: 16px; color: var(--ink); }
+  #loginForm button { width: 100%; }
+  #loginMsg { padding: 0 0 12px; text-align: left; }
 
   #reader-wrap { max-width: 1000px; margin: 12px auto 0; padding: 0 12px; }
   #reader { width: 100%; max-width: 480px; border-radius: 8px; overflow: hidden; background: #000; }
   #stop { margin-top: 8px; }
 
-  /* ส่วนที่ 1 = รายการ FG (ซ้าย)  ส่วนที่ 2 = ไส้ใน FG (ขวา) */
+  /* ส่วนที่ 1 = รายการ FG (ซ้าย)  ส่วนที่ 2 = BOM Packing ของ FG (ขวา) */
   #app { max-width: 1000px; margin: 0 auto; padding: 12px; display: grid;
     grid-template-columns: 280px 1fr; gap: 12px; align-items: start; }
   #list { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
@@ -75,11 +90,27 @@
 </head>
 <body>
 
+<div id="login">
+  <img src="icon-192.png" alt="">
+  <h1>BOM Packing</h1>
+  <form id="loginForm" class="card">
+    <label>ชื่อผู้ใช้
+      <input id="u" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    </label>
+    <label>รหัสผ่าน
+      <input id="p" type="password" autocomplete="current-password" required>
+    </label>
+    <div id="loginMsg" class="msg err" hidden></div>
+    <button type="submit" id="loginBtn">เข้าสู่ระบบ</button>
+  </form>
+</div>
+
 <header>
   <form id="form">
     <input id="q" type="search" placeholder="สแกนหรือพิมพ์ FG code" autocomplete="off">
     <button type="button" id="scan" class="ghost">สแกน</button>
     <button type="submit">ค้นหา</button>
+    <button type="button" id="logout" class="ghost">ออก</button>
   </form>
 </header>
 
@@ -96,10 +127,13 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
-  const API_URL = "https://script.google.com/macros/s/AKfycbwoKmgi7YWr16z1-q6UyXrJt_3yG0WCV-lTGn9pwtuxjWpz7RteQ0gyqYL1DL_qbfbnhA/exec";
+  const API_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
 
   const $ = (id) => document.getElementById(id);
   const q = $("q"), app = $("app"), listEl = $("list"), detail = $("detail"), wrap = $("reader-wrap");
+  const DETAIL_HINT = "เลือก FG จากรายการเพื่อดู BOM Packing";
+  const TOKEN_KEY = "bom_token";
+
   let all = [];            // รายการ FG ทั้งหมด
   let bom = {};            // FG code (ตัวพิมพ์ใหญ่) -> [[Item Number, Product Name, Unit, Use Qty], ...]
   let ready = false;       // โหลดข้อมูลครบแล้วหรือยัง
@@ -107,17 +141,80 @@
   let selected = "";       // FG code ที่เลือกอยู่
   let scanner = null;
 
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: (k) => { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  let token = store.get(TOKEN_KEY);
+
   // ตัดข้อความหลัง "::" ออก  เช่น 3-01-10001::TS.. -> 3-01-10001
   const clean = (raw) => String(raw).split("::")[0].trim();
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const msg = (t, err) => `<div class="msg${err ? " err" : ""}">${esc(t)}</div>`;
 
+  // ส่งแบบ POST ไม่ตั้ง header เพื่อให้เป็น simple request (ไม่ติด CORS preflight ของ Apps Script)
+  async function post(body) {
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+    return res.json();
+  }
+
+  // ---------- Login / Logout ----------
+  const setAuthed = (on) => document.body.classList.toggle("authed", on);
+
+  function showLoginMsg(text) {
+    const m = $("loginMsg");
+    m.textContent = text;
+    m.hidden = !text;
+  }
+
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("loginBtn");
+    btn.disabled = true;
+    btn.textContent = "กำลังตรวจสอบ…";
+    showLoginMsg("");
+    try {
+      const d = await post({ action: "login", user: $("u").value, pass: $("p").value });
+      if (!d.ok) {
+        showLoginMsg(d.error || "เข้าสู่ระบบไม่ได้");
+      } else {
+        token = d.token;
+        store.set(TOKEN_KEY, token);
+        $("p").value = "";
+        setAuthed(true);
+        loadAll();
+      }
+    } catch (err) {
+      showLoginMsg("เชื่อมต่อไม่ได้ ตรวจ API_URL และการ Deploy");
+    }
+    btn.disabled = false;
+    btn.textContent = "เข้าสู่ระบบ";
+  });
+
+  async function logout(message, notifyServer) {
+    const old = token;
+    token = "";
+    store.del(TOKEN_KEY);
+    await stopScan();
+    all = []; bom = {}; ready = false; pending = null; selected = "";
+    q.value = "";
+    app.classList.remove("has-detail");
+    listEl.innerHTML = msg("กำลังโหลดข้อมูล…");
+    detail.innerHTML = msg(DETAIL_HINT);
+    setAuthed(false);
+    showLoginMsg(message || "");
+    if (notifyServer && old) post({ action: "logout", token: old }).catch(() => {});
+  }
+
+  $("logout").addEventListener("click", () => logout("", true));
+
   // ---------- โหลดข้อมูลทั้งหมดรอบเดียว ----------
   async function loadAll() {
     try {
-      const res = await fetch(API_URL + "?action=all");
-      const d = await res.json();
+      const d = await post({ action: "all", token });
+      if (d.needLogin) return logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่", false);
       if (!d.ok) throw new Error(d.error);
       all = d.fg;
       bom = d.bom;
@@ -235,7 +332,8 @@
   $("form").addEventListener("submit", (e) => { e.preventDefault(); search(q.value); });
   q.addEventListener("input", renderList);
 
-  loadAll();
+  // เริ่มต้น: มี token เก็บไว้ก็โหลดข้อมูลเลย ถ้าไม่มีก็แสดงหน้า Login
+  if (token) { setAuthed(true); loadAll(); } else { setAuthed(false); }
 </script>
 </body>
 </html>
