@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>แจ้งแก้ไข BOM</title>
+
+  <!-- ไอคอน + manifest ฝังจริง ทำงานอัตโนมัติทุกเครื่อง เพราะหน้านี้เป็นหน้าเว็บปกติ ไม่ได้ซ้อนอยู่ใน iframe แบบ Apps Script -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+  <meta name="theme-color" content="#e02824">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="แจ้งแก้ไข BOM">
+
+  <style>
+    body { font-family: sans-serif; padding: 16px; max-width: 480px; margin: auto; }
+    label { display:block; margin-top:12px; font-weight:bold; font-size:14px; }
+    label .req { color:#d93025; }
+    input, select, textarea { width:100%; padding:8px; font-size:16px; box-sizing:border-box; margin-top:4px; font-family: sans-serif; }
+    .scan-btn { background:#4285f4; color:#fff; border:none; padding:8px 12px; margin-top:4px; border-radius:4px; font-size:14px; white-space:nowrap; }
+    .photo-btn { background:#4285f4; color:#fff; border:none; padding:10px 16px; margin-top:4px; border-radius:4px; font-size:15px; width:100%; }
+    #photoFileName { display:block; margin-top:6px; font-size:13px; color:#555; }
+    #submitBtn { width:100%; background:#34a853; color:#fff; padding:12px; font-size:16px; border:none; border-radius:4px; margin-top:20px; }
+    .field-row { display:flex; gap:8px; align-items:center; }
+    .field-row input { flex:1; }
+  </style>
+</head>
+<body>
+  <h2>แจ้งแก้ไข BOM</h2>
+  <form id="bomForm">
+
+    <label>ผู้แจ้ง <span class="req">*</span></label>
+    <select id="reporter">
+      <option value="">-- เลือกผู้แจ้ง --</option>
+      <option value="ปู">ปู</option>
+      <option value="ต้น">ต้น</option>
+      <option value="ไมค์">ไมค์</option>
+      <option value="พีช">พีช</option>
+    </select>
+
+    <label>รหัสที่เอาไปใช้ทดแทน_รหัสของที่ใส่เพิ่ม</label>
+    <div class="field-row">
+      <input type="text" id="replaceCode">
+      <button type="button" class="scan-btn" onclick="startScan('replaceCode')">⁅ สแกน ⁆</button>
+    </div>
+
+    <label>ชื่อวัสดุดิบ RM</label>
+    <input type="text" id="rmName">
+
+    <label>จำนวนที่ใช้ <span class="req">*</span></label>
+    <input type="number" id="qty">
+
+    <label>ชนิดการแก้ไข <span class="req">*</span></label>
+    <select id="editType">
+      <option value="">-- เลือกชนิดการแก้ไข --</option>
+      <option value="เพิ่ม">เพิ่ม</option>
+      <option value="ทดแทน">ทดแทน</option>
+      <option value="เอาออก">เอาออก</option>
+    </select>
+
+    <label>รหัสเดิม (ถ้าทราบ)</label>
+    <div class="field-row">
+      <input type="text" id="oldCode">
+      <button type="button" class="scan-btn" onclick="startScan('oldCode')">⁅ สแกน ⁆</button>
+    </div>
+
+    <label>PD (ถ้าทราบ)</label>
+    <input type="text" id="pd">
+
+    <label>รหัสงาน FG (ถ้าทราบ)</label>
+    <div class="field-row">
+      <input type="text" id="fgCode">
+      <button type="button" class="scan-btn" onclick="startScan('fgCode')">⁅ สแกน ⁆</button>
+    </div>
+
+    <label>ชื่องาน FG</label>
+    <input type="text" id="fgName">
+
+    <label>วันที่นำไปใช้ <span class="req">*</span></label>
+    <input type="date" id="useDate">
+
+    <label>รูปถ่าย</label>
+    <button type="button" class="photo-btn" onclick="document.getElementById('photo').click()">📷 ถ่ายรูป</button>
+    <input type="file" id="photo" accept="image/*" capture="environment" style="display:none;">
+    <span id="photoFileName"></span>
+
+    <label>หมายเหตุ</label>
+    <textarea id="remark" rows="3"></textarea>
+
+    <button type="button" id="submitBtn" onclick="submitForm()">บันทึกข้อมูล</button>
+  </form>
+
+  <script>
+    // ===== แก้ 2 ค่านี้ให้ตรงกับของจริงก่อนใช้งาน =====
+    const EXEC_URL = 'https://script.google.com/macros/s/AKfycbyl0SVGCDIBSFtR1_aJu-H9eCThos5S2Rqr3Y5eTeWYM2J9cgmYbGsJ0jr3OHdpKJDT/exec';
+    const SCANNER_URL = 'https://appcreatorscmrefthai-code.github.io/qr-scanner/scanner.html';
+    // ===================================================
+
+    function startScan(fieldId) {
+      window.open(SCANNER_URL + '?field=' + fieldId, '_blank', 'width=420,height=650');
+    }
+
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.field) {
+        const el = document.getElementById(e.data.field);
+        if (el) el.value = e.data.value;
+      }
+    });
+
+    document.getElementById('photo').addEventListener('change', function(e) {
+      const nameSpan = document.getElementById('photoFileName');
+      nameSpan.innerText = e.target.files.length > 0 ? '✅ เลือกรูปแล้ว: ' + e.target.files[0].name : '';
+    });
+
+    function validateForm() {
+      if (!reporter.value) { alert('กรุณาเลือกผู้แจ้ง'); return false; }
+      if (!qty.value) { alert('กรุณากรอกจำนวนที่ใช้'); return false; }
+      if (!editType.value) { alert('กรุณาเลือกชนิดการแก้ไข'); return false; }
+      if (!useDate.value) { alert('กรุณาเลือกวันที่นำไปใช้'); return false; }
+      return true;
+    }
+
+    function submitForm() {
+      if (!validateForm()) return;
+
+      const photoInput = document.getElementById('photo');
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'กำลังบันทึก...';
+
+      function doSubmit(photoBase64, photoName) {
+        const data = {
+          reporter: reporter.value,
+          replaceCode: replaceCode.value,
+          rmName: rmName.value,
+          qty: qty.value,
+          editType: editType.value,
+          oldCode: oldCode.value,
+          pd: pd.value,
+          fgCode: fgCode.value,
+          fgName: fgName.value,
+          useDate: useDate.value,
+          photoBase64: photoBase64,
+          photoName: photoName,
+          remark: remark.value
+        };
+
+        // ส่งเป็น text/plain เพื่อเลี่ยง CORS preflight ที่ Apps Script รับไม่ได้
+        fetch(EXEC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(data)
+        })
+          .then(r => r.json())
+          .then(res => {
+            if (res.status === 'success') {
+              alert('บันทึกสำเร็จ เลขที่งาน: ' + res.jobNo);
+              document.getElementById('bomForm').reset();
+              document.getElementById('photoFileName').innerText = '';
+            } else {
+              alert('เกิดข้อผิดพลาด: ' + (res.message || 'ไม่ทราบสาเหตุ'));
+            }
+          })
+          .catch(err => alert('เกิดข้อผิดพลาด: ' + err.message))
+          .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'บันทึกข้อมูล';
+          });
+      }
+
+      if (photoInput.files.length > 0) {
+        const reader = new FileReader();
+        reader.onload = e => doSubmit(e.target.result, photoInput.files[0].name);
+        reader.readAsDataURL(photoInput.files[0]);
+      } else {
+        doSubmit('', '');
+      }
+    }
+  </script>
+</body>
+</html>
