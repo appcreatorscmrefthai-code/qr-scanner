@@ -4,14 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>แจ้งแก้ไข BOM</title>
-<meta name="theme-color" content="#1a5fb4">
-<link rel="icon" href="favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="แจ้งแก้ไข BOM">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -117,7 +109,9 @@
   .task-head .code { font-weight: 700; font-size: 16px; }
   .task-head .model { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .task-count { background: var(--blue-bg); color: var(--blue); border-radius: 999px; padding: 2px 10px;
-    font-size: 12px; font-weight: 700; white-space: nowrap; }
+    font-size: 12px; font-weight: 700; white-space: nowrap; align-self: flex-end; }
+  .task-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .btn-small { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
   .task-meta { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
   .task-items { display: none; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
@@ -302,16 +296,34 @@
     });
   });
 
-  // ---------- Meta (dropdown options) ----------
-  async function loadMeta() {
+  // ---------- โหลดข้อมูลค้นหาทั้งหมดครั้งเดียวตอนเปิดหน้า ----------
+  // เดิมแต่ละครั้งที่พิมพ์จะยิงไปเซิร์ฟเวอร์ค้นหาใหม่ ("กำลังค้นหา…" ค้าง) ตอนนี้โหลดทั้งตาราง
+  // PD number / Released products มาเก็บเป็น Map ในเบราว์เซอร์ตั้งแต่เปิดหน้า แล้วค้นหาในเครื่องทันที
+  let pdMap = new Map();   // รหัสงาน FG (ตัวพิมพ์ใหญ่) -> {pdNumber, fgModel, fgType, itemNumber}
+  let rmMap = new Map();   // รหัสที่เอาไปใช้ (ตัวพิมพ์ใหญ่) -> {productName, unit}
+  let initReady = false;
+
+  async function loadInit() {
     try {
-      const d = await post({ action: "meta" });
+      const d = await post({ action: "init" });
       if (!d.ok) throw new Error(d.error);
       fillOptions($("reporter"), d.reporters, "— เลือกผู้แจ้ง —");
       fillOptions($("editType"), d.editTypes, "— เลือกชนิดการแก้ไข —");
       fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
+
+      d.pd.forEach(([qr, pdNumber, fgModel, fgType, itemNumber]) => {
+        pdMap.set(qr.toUpperCase(), { pdNumber, fgModel, fgType, itemNumber });
+      });
+      d.rm.forEach(([qr, productName, unit]) => {
+        rmMap.set(qr.toUpperCase(), { productName, unit });
+      });
+      initReady = true;
+
+      // ถ้าผู้ใช้สแกน/พิมพ์ไว้ก่อนโหลดเสร็จ ให้ค้นหาซ้ำทันทีที่พร้อม
+      if ($("fgCode").value.trim()) resolveFG($("fgCode").value.trim());
+      if ($("rmCode").value.trim()) resolveRM($("rmCode").value.trim());
     } catch (err) {
-      // เงียบไว้ก็ได้ ฟอร์มยังใช้ค้นหา/สแกนได้ตามปกติ แค่ dropdown จะว่าง
+      setStatus($("fgStatus"), "err", "โหลดข้อมูลค้นหาไม่ได้: " + err.message + " — ยังคีย์เองได้ตามปกติ");
     }
   }
   function fillOptions(sel, list, placeholder) {
@@ -322,7 +334,7 @@
   }
 
   // ---------- ส่วนที่ 1: ข้อมูลงาน (Header) ----------
-  // สแกน/พิมพ์รหัสงาน FG ได้ -> auto เติม เลข PD + ชื่องาน FG
+  // สแกน/พิมพ์รหัสงาน FG ได้ -> auto เติม เลข PD + ชื่องาน FG (ค้นหาในเครื่อง ไม่ยิงเซิร์ฟเวอร์ จึงเร็ว)
   // สแกนไม่ได้ -> คีย์ เลข PD หรือ ชื่องาน FG เองตรงๆ โดยปล่อยรหัสงาน FG ว่างไว้ ไม่ต้อง lookup
   function setStatus(el, cls, text) {
     el.className = "status-line show" + (cls ? " " + cls : "");
@@ -338,30 +350,23 @@
     $("itemCard").hidden = !ready;
   }
 
-  let fgTimer = null;
   $("fgCode").addEventListener("input", () => {
-    clearTimeout(fgTimer);
     const code = $("fgCode").value.trim();
     if (!code) { clearStatus($("fgStatus")); updateItemCardVisibility(); return; }
-    fgTimer = setTimeout(() => resolveFG(code), 400);
+    resolveFG(code);
   });
 
-  async function resolveFG(code) {
-    setStatus($("fgStatus"), "", "กำลังค้นหา…");
-    try {
-      const d = await post({ action: "lookupFG", code });
-      if (!d.ok) throw new Error(d.error);
-      if (!d.found) {
-        setStatus($("fgStatus"), "err", "ไม่พบรหัสนี้ — คีย์เลข PD หรือชื่องาน FG เองด้านล่างได้");
-      } else {
-        $("pdNumber").value = d.pdNumber || "";
-        $("fgModel").value = d.fgModel || "";
-        setStatus($("fgStatus"), "ok", `พบ: ${d.fgModel}${d.pdNumber ? " · PD " + d.pdNumber : ""}`);
-      }
-      updateItemCardVisibility();
-    } catch (err) {
-      setStatus($("fgStatus"), "err", "เชื่อมต่อไม่ได้: " + err.message);
+  function resolveFG(code) {
+    if (!initReady) { setStatus($("fgStatus"), "", "กำลังโหลดข้อมูลสำหรับค้นหา…"); return; }
+    const rec = pdMap.get(code.toUpperCase());
+    if (!rec) {
+      setStatus($("fgStatus"), "err", "ไม่พบรหัสนี้ — คีย์เลข PD หรือชื่องาน FG เองด้านล่างได้");
+    } else {
+      $("pdNumber").value = rec.pdNumber || "";
+      $("fgModel").value = rec.fgModel || "";
+      setStatus($("fgStatus"), "ok", `พบ: ${rec.fgModel}${rec.pdNumber ? " · PD " + rec.pdNumber : ""}`);
     }
+    updateItemCardVisibility();
   }
 
   $("pdNumber").addEventListener("input", updateItemCardVisibility);
@@ -379,29 +384,22 @@
   });
 
   // ---------- ส่วนที่ 2: รายการวัตถุดิบ (Item) ----------
-  // สแกน/พิมพ์รหัสที่เอาไปใช้ได้ -> auto เติม ชื่อวัตถุดิบ
+  // สแกน/พิมพ์รหัสที่เอาไปใช้ได้ -> auto เติม ชื่อวัตถุดิบ (ค้นหาในเครื่อง เร็วเหมือนกัน)
   // สแกนไม่ได้ -> คีย์ ชื่อวัตถุดิบ เองตรงๆ โดยปล่อยรหัสที่เอาไปใช้ว่างไว้
-  let rmTimer = null;
   $("rmCode").addEventListener("input", () => {
-    clearTimeout(rmTimer);
     const code = $("rmCode").value.trim();
     if (!code) { clearStatus($("rmStatus")); return; }
-    rmTimer = setTimeout(() => resolveRM(code), 400);
+    resolveRM(code);
   });
 
-  async function resolveRM(code) {
-    setStatus($("rmStatus"), "", "กำลังค้นหา…");
-    try {
-      const d = await post({ action: "lookupRM", code });
-      if (!d.ok) throw new Error(d.error);
-      if (!d.found) {
-        setStatus($("rmStatus"), "err", "ไม่พบรหัสนี้ — คีย์ชื่อวัตถุดิบเองด้านล่างได้");
-      } else {
-        $("rmName").value = d.productName || "";
-        setStatus($("rmStatus"), "ok", `พบ: ${d.productName}${d.unit ? " · หน่วย " + d.unit : ""}`);
-      }
-    } catch (err) {
-      setStatus($("rmStatus"), "err", "เชื่อมต่อไม่ได้: " + err.message);
+  function resolveRM(code) {
+    if (!initReady) { setStatus($("rmStatus"), "", "กำลังโหลดข้อมูลสำหรับค้นหา…"); return; }
+    const rec = rmMap.get(code.toUpperCase());
+    if (!rec) {
+      setStatus($("rmStatus"), "err", "ไม่พบรหัสนี้ — คีย์ชื่อวัตถุดิบเองด้านล่างได้");
+    } else {
+      $("rmName").value = rec.productName || "";
+      setStatus($("rmStatus"), "ok", `พบ: ${rec.productName}${rec.unit ? " · หน่วย " + rec.unit : ""}`);
     }
   }
 
@@ -540,6 +538,7 @@
   // ---------- Dashboard ----------
   let dashLoaded = false;
   let dashItems = [];
+  let dashTaskList = []; // รายการงานล่าสุดที่ render ไว้ (ให้ปุ่ม "เพิ่มรายการ" อ้างอิงกลับมาใช้)
 
   async function loadDashboard() {
     $("dashList").innerHTML = `<div class="msg">กำลังโหลดข้อมูล…</div>`;
@@ -578,6 +577,7 @@
     });
 
     const list = Array.from(tasks.values()).sort((a, b) => String(b.last).localeCompare(String(a.last)));
+    dashTaskList = list;
 
     if (!list.length) { $("dashList").innerHTML = `<div class="msg">ไม่พบข้อมูล</div>`; return; }
 
@@ -589,7 +589,10 @@
             <div class="model">${esc(t.fgModel)}${t.pdNumber ? " · PD " + esc(t.pdNumber) : ""}</div>
             <div class="task-meta">อัปเดตล่าสุด ${esc(t.last)}</div>
           </div>
-          <div class="task-count">${t.items.length} รายการ</div>
+          <div class="task-side">
+            <div class="task-count">${t.items.length} รายการ</div>
+            <button type="button" class="btn btn-ghost btn-small add-to-task" data-idx="${i}">+ เพิ่มรายการ</button>
+          </div>
         </div>
         <div class="task-items" id="task-${i}">
           ${t.items.map((it) => `
@@ -608,6 +611,34 @@
     document.querySelectorAll(".task-head").forEach((h) => {
       h.addEventListener("click", () => $("task-" + h.dataset.idx).classList.toggle("open"));
     });
+    document.querySelectorAll(".add-to-task").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation(); // กันไม่ให้ไปเปิด/ปิดรายการของการ์ดพร้อมกัน
+        goToTaskHeader(btn.dataset.idx);
+      });
+    });
+  }
+
+  // กด "เพิ่มรายการ" จากการ์ดงานใน Dashboard -> กลับไปแท็บแจ้งงาน พร้อมข้อมูล Header เดิม
+  function goToTaskHeader(idx) {
+    const t = dashTaskList[idx];
+    if (!t) return;
+
+    $("fgCode").value = t.fgCode || "";
+    $("pdNumber").value = t.pdNumber || "";
+    $("fgModel").value = t.fgModel || "";
+    clearStatus($("fgStatus"));
+    sessionItems = [];
+    renderSession();
+    resetItemForm();
+    updateItemCardVisibility();
+
+    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x.dataset.view === "report"));
+    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    $("view-report").classList.add("active");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => $("rmCode").focus(), 300);
   }
 
   $("dashSearch").addEventListener("input", renderDashboard);
@@ -653,7 +684,7 @@
   $("scanCancel").addEventListener("click", closeScanner);
 
   // ---------- เริ่มต้น ----------
-  loadMeta();
+  loadInit();
 </script>
 </body>
 </html>
