@@ -151,6 +151,11 @@
       </div>
 
       <div class="field">
+        <label>สถานะของงาน <span class="req">*</span></label>
+        <select id="taskStatus"><option value="">— เลือกสถานะ —</option></select>
+      </div>
+
+      <div class="field">
         <label>รหัสงาน FG</label>
         <div class="scan-row">
           <input id="fgCode" type="text" placeholder="สแกนหรือพิมพ์รหัสงาน FG" autocomplete="off">
@@ -256,6 +261,7 @@
     <div class="toolbar">
       <input id="dashSearch" type="search" placeholder="ค้นหา FG code / ชื่องาน / PD">
       <select id="dashReporter"><option value="">ผู้แจ้งทั้งหมด</option></select>
+      <select id="dashStatus"><option value="">สถานะทั้งหมด</option></select>
     </div>
     <div id="dashList"><div class="msg">กำลังโหลดข้อมูล…</div></div>
   </section>
@@ -309,7 +315,9 @@
       if (!d.ok) throw new Error(d.error);
       fillOptions($("reporter"), d.reporters, "— เลือกผู้แจ้ง —");
       fillOptions($("editType"), d.editTypes, "— เลือกชนิดการแก้ไข —");
+      fillOptions($("taskStatus"), d.statuses || [], "— เลือกสถานะ —");
       fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
+      fillOptions($("dashStatus"), d.statuses || [], "สถานะทั้งหมด");
 
       d.pd.forEach(([qr, pdNumber, fgModel, fgType, itemNumber]) => {
         pdMap.set(qr.toUpperCase(), { pdNumber, fgModel, fgType, itemNumber });
@@ -376,6 +384,7 @@
     $("fgCode").value = "";
     $("pdNumber").value = "";
     $("fgModel").value = "";
+    $("taskStatus").value = "";
     clearStatus($("fgStatus"));
     sessionItems = [];
     renderSession();
@@ -474,6 +483,9 @@
     const reporter = $("reporter").value;
     if (!reporter) { $("reporter").focus(); return; }
 
+    const status = $("taskStatus").value;
+    if (!status) { $("taskStatus").focus(); return; }
+
     const rmCode = $("rmCode").value.trim();
     const rmName = $("rmName").value.trim();
     if (!rmCode && !rmName) { $("rmName").focus(); return; }
@@ -481,6 +493,7 @@
     const payload = {
       header: {
         reporter,
+        status,
         fgCode: $("fgCode").value.trim(),
         pdNumber: $("pdNumber").value.trim(),
         fgModel: $("fgModel").value.trim(),
@@ -535,6 +548,13 @@
     return `<span class="badge ${cls}">${esc(type)}</span>`;
   }
 
+  function statusBadge(status) {
+    if (!status) return "";
+    const map = { "อยู่ระหว่างดำเนินการ": "temp", "แจ้งแก้ไข": "perm" };
+    const cls = map[status] || "temp";
+    return `<span class="badge ${cls}">${esc(status)}</span>`;
+  }
+
   // ---------- Dashboard ----------
   let dashLoaded = false;
   let dashItems = [];
@@ -557,6 +577,7 @@
   function renderDashboard() {
     const q = $("dashSearch").value.trim().toLowerCase();
     const reporterFilter = $("dashReporter").value;
+    const statusFilter = $("dashStatus").value;
 
     const filtered = dashItems.filter((it) => {
       if (reporterFilter && it.reporter !== reporterFilter) return false;
@@ -564,19 +585,24 @@
       return (it.fgCode + " " + it.fgModel + " " + it.pdNumber).toLowerCase().includes(q);
     });
 
-    const tasks = new Map(); // key -> {fgCode, fgModel, pdNumber, items:[], last}
+    const tasks = new Map(); // key -> {fgCode, fgModel, pdNumber, status, items:[], last}
     filtered.forEach((it) => {
       const key = it.fgCode || it.pdNumber || it.fgModel || "(ไม่ระบุงาน)";
-      if (!tasks.has(key)) tasks.set(key, { fgCode: it.fgCode, fgModel: it.fgModel, pdNumber: it.pdNumber, items: [], last: it.date });
+      if (!tasks.has(key)) tasks.set(key, { fgCode: it.fgCode, fgModel: it.fgModel, pdNumber: it.pdNumber, status: it.status, items: [], last: it.date });
       const t = tasks.get(key);
       t.items.push(it);
       if (String(it.date) > String(t.last)) t.last = it.date;
       if (!t.fgCode && it.fgCode) t.fgCode = it.fgCode;
       if (!t.fgModel && it.fgModel) t.fgModel = it.fgModel;
       if (!t.pdNumber && it.pdNumber) t.pdNumber = it.pdNumber;
+      if (it.status) t.status = it.status; // ใช้ค่าสถานะล่าสุดของงานนี้ (รายการใหม่สุดเป็นหลัก)
     });
 
-    const list = Array.from(tasks.values()).sort((a, b) => String(b.last).localeCompare(String(a.last)));
+    // กรองตามสถานะ หลังจากรวมเป็นงานแล้ว (สถานะเป็นคุณสมบัติของงาน ไม่ใช่ของแต่ละรายการ)
+    let taskValues = Array.from(tasks.values());
+    if (statusFilter) taskValues = taskValues.filter((t) => t.status === statusFilter);
+
+    const list = taskValues.sort((a, b) => String(b.last).localeCompare(String(a.last)));
     dashTaskList = list;
 
     if (!list.length) { $("dashList").innerHTML = `<div class="msg">ไม่พบข้อมูล</div>`; return; }
@@ -588,6 +614,7 @@
             <div class="code">${esc(t.fgCode || t.fgModel || t.pdNumber || "(ไม่ระบุงาน)")}</div>
             <div class="model">${esc(t.fgModel)}${t.pdNumber ? " · PD " + esc(t.pdNumber) : ""}</div>
             <div class="task-meta">อัปเดตล่าสุด ${esc(t.last)}</div>
+            ${t.status ? `<div style="margin-top:6px;">${statusBadge(t.status)}</div>` : ""}
           </div>
           <div class="task-side">
             <div class="task-count">${t.items.length} รายการ</div>
@@ -627,6 +654,7 @@
     $("fgCode").value = t.fgCode || "";
     $("pdNumber").value = t.pdNumber || "";
     $("fgModel").value = t.fgModel || "";
+    $("taskStatus").value = t.status || "";
     clearStatus($("fgStatus"));
     sessionItems = [];
     renderSession();
@@ -643,6 +671,7 @@
 
   $("dashSearch").addEventListener("input", renderDashboard);
   $("dashReporter").addEventListener("change", renderDashboard);
+  $("dashStatus").addEventListener("change", renderDashboard);
 
   // ---------- Scanner (ใช้ร่วมกันทุกช่อง) ----------
   let scanner = null, scanTarget = null;
