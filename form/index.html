@@ -1,183 +1,651 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>แจ้งแก้ไข BOM</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แจ้งแก้ไข BOM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1d2733; --muted: #6b7684; --line: #e2e6ea;
+    --blue: #1a5fb4; --blue-bg: #e8f0fb;
+    --green: #1f9254; --green-bg: #e7f6ee;
+    --orange: #c2660b; --orange-bg: #fdf0e3;
+    --red: #b42318; --red-bg: #fdecea;
+    --gray-bg: #eef0f2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans Thai", system-ui, sans-serif; font-size: 16px; -webkit-text-size-adjust: 100%; }
+  h1, h2, h3 { margin: 0; }
+  button { font: inherit; cursor: pointer; }
+  input, select, textarea { font: inherit; color: inherit; }
 
-  <!-- ไอคอน + manifest ฝังจริง ทำงานอัตโนมัติทุกเครื่อง เพราะหน้านี้เป็นหน้าเว็บปกติ ไม่ได้ซ้อนอยู่ใน iframe แบบ Apps Script -->
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-  <meta name="theme-color" content="#e02824">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="แจ้งแก้ไข BOM">
+  /* ---------- Layout ---------- */
+  header { position: sticky; top: 0; z-index: 10; background: var(--card); border-bottom: 1px solid var(--line); }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; max-width: 760px; margin: 0 auto; }
+  .topbar h1 { font-size: 18px; flex: 1; }
+  .tabs { display: flex; gap: 6px; max-width: 760px; margin: 0 auto; padding: 0 14px 10px; }
+  .tab { flex: 1; text-align: center; padding: 9px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--muted); font-weight: 600; }
+  .tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
-  <style>
-    body { font-family: sans-serif; padding: 16px; max-width: 480px; margin: auto; }
-    label { display:block; margin-top:12px; font-weight:bold; font-size:14px; }
-    label .req { color:#d93025; }
-    input, select, textarea { width:100%; padding:8px; font-size:16px; box-sizing:border-box; margin-top:4px; font-family: sans-serif; }
-    .scan-btn { background:#4285f4; color:#fff; border:none; padding:8px 12px; margin-top:4px; border-radius:4px; font-size:14px; white-space:nowrap; }
-    .photo-btn { background:#4285f4; color:#fff; border:none; padding:10px 16px; margin-top:4px; border-radius:4px; font-size:15px; width:100%; }
-    #photoFileName { display:block; margin-top:6px; font-size:13px; color:#555; }
-    #submitBtn { width:100%; background:#34a853; color:#fff; padding:12px; font-size:16px; border:none; border-radius:4px; margin-top:20px; }
-    .field-row { display:flex; gap:8px; align-items:center; }
-    .field-row input { flex:1; }
-  </style>
+  main { max-width: 760px; margin: 0 auto; padding: 14px; padding-bottom: 60px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card + .card { margin-top: 12px; }
+  .card h2 { font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .n { width: 22px; height: 22px; border-radius: 999px; background: var(--blue); color: #fff;
+    font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .field .req { color: var(--red); }
+  .field .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .field input[type=text], .field input[type=number], .field input[type=date],
+  .field select, .field textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  }
+  .field textarea { resize: vertical; min-height: 56px; }
+  .scan-row { display: flex; gap: 8px; }
+  .scan-row input { flex: 1; min-width: 0; }
+
+  .or-sep { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--muted); font-size: 12px; }
+  .or-sep::before, .or-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .stepper { display: flex; align-items: stretch; gap: 8px; }
+  .stepper button { width: 42px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+    font-size: 20px; color: var(--blue); line-height: 1; }
+  .stepper input { flex: 1; text-align: center; }
+
+  button.btn { padding: 10px 16px; border-radius: 8px; border: 1px solid transparent; font-weight: 600; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-ghost { background: #fff; color: var(--blue); border-color: var(--line); }
+  .btn-block { width: 100%; }
+  button.btn:disabled { opacity: .55; cursor: default; }
+
+  .photo-pick { display: flex; align-items: center; gap: 10px; }
+  .photo-pick label.btn { display: inline-flex; align-items: center; gap: 6px; }
+  .photo-thumb { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; border: 1px solid var(--line); display: none; }
+
+  .msg { color: var(--muted); padding: 18px 4px; text-align: center; font-size: 14px; }
+  .msg.err { color: var(--red); }
+  .msg.ok { color: var(--green); }
+
+  .status-line { font-size: 13px; margin-top: 6px; display: none; }
+  .status-line.show { display: block; }
+  .status-line.ok { color: var(--green); }
+  .status-line.err { color: var(--muted); }
+
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.add { background: var(--green-bg); color: var(--green); }
+  .badge.temp { background: var(--orange-bg); color: var(--orange); }
+  .badge.perm { background: var(--blue-bg); color: var(--blue); }
+  .badge.remove { background: var(--red-bg); color: var(--red); }
+
+  .session-list { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 12px; }
+  .session-item { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid var(--line); font-size: 14px; }
+  .session-item:last-child { border-bottom: 0; }
+  .session-item .name { font-weight: 600; }
+  .session-item .sub { color: var(--muted); font-size: 13px; }
+
+  /* Dashboard */
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+  .toolbar input { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .toolbar select { padding: 10px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+
+  .task-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    margin-bottom: 10px; }
+  .task-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .task-head .code { font-weight: 700; font-size: 16px; }
+  .task-head .model { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .task-count { background: var(--blue-bg); color: var(--blue); border-radius: 999px; padding: 2px 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .task-meta { margin-top: 6px; font-size: 12px; color: var(--muted); }
+
+  .task-items { display: none; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .task-items.open { display: block; }
+  .item-row { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .item-row:last-child { border-bottom: 0; }
+  .item-row .r1 { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .item-row .r1 .rm { font-weight: 600; }
+  .item-row .r2 { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .item-row a.photo-link { color: var(--blue); font-size: 13px; }
+
+  @media (min-width: 560px) {
+    .toolbar select { min-width: 160px; }
+  }
+</style>
 </head>
 <body>
-  <h2>แจ้งแก้ไข BOM</h2>
-  <form id="bomForm">
 
-    <label>ผู้แจ้ง <span class="req">*</span></label>
-    <select id="reporter">
-      <option value="">-- เลือกผู้แจ้ง --</option>
-      <option value="ปู">ปู</option>
-      <option value="ต้น">ต้น</option>
-      <option value="ไมค์">ไมค์</option>
-      <option value="พีช">พีช</option>
-    </select>
+<header>
+  <div class="topbar"><h1>แจ้งแก้ไข BOM</h1></div>
+  <div class="tabs">
+    <button type="button" class="tab active" data-view="report">แจ้งงาน</button>
+    <button type="button" class="tab" data-view="dashboard">Dashboard</button>
+  </div>
+</header>
 
-    <label>รหัสที่เอาไปใช้ทดแทน_รหัสของที่ใส่เพิ่ม</label>
-    <div class="field-row">
-      <input type="text" id="replaceCode">
-      <button type="button" class="scan-btn" onclick="startScan('replaceCode')">⁅ สแกน ⁆</button>
+<main>
+  <!-- ====================== แจ้งงาน ====================== -->
+  <section id="view-report" class="view active">
+
+    <div class="card" id="headerCard">
+      <h2><span class="n">1</span>ข้อมูลงาน</h2>
+
+      <div class="field">
+        <label>ผู้แจ้ง <span class="req">*</span></label>
+        <select id="reporter"><option value="">— เลือกผู้แจ้ง —</option></select>
+      </div>
+
+      <div class="field">
+        <label>รหัสงาน FG</label>
+        <div class="scan-row">
+          <input id="fgCode" type="text" placeholder="สแกนหรือพิมพ์รหัสงาน FG" autocomplete="off">
+          <button type="button" class="btn btn-ghost" data-scan="fgCode">สแกน</button>
+        </div>
+        <div class="status-line" id="fgStatus"></div>
+      </div>
+
+      <div class="or-sep">หรือถ้าสแกนไม่ได้ คีย์เองด้านล่าง</div>
+
+      <div class="two-col">
+        <div class="field">
+          <label>เลข PD</label>
+          <input id="pdNumber" type="text" placeholder="เช่น PD26000001" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>ชื่องาน FG</label>
+          <input id="fgModel" type="text" placeholder="เช่น BM19-WG" autocomplete="off">
+        </div>
+      </div>
     </div>
 
-    <label>ชื่อวัสดุดิบ RM</label>
-    <input type="text" id="rmName">
+    <div class="card" id="itemCard" hidden>
+      <h2><span class="n">2</span>เพิ่มรายการวัตถุดิบ</h2>
+      <form id="itemForm">
+        <div class="field">
+          <label>รหัสที่เอาไปใช้</label>
+          <div class="scan-row">
+            <input id="rmCode" type="text" placeholder="สแกนหรือพิมพ์รหัสวัตถุดิบ" autocomplete="off">
+            <button type="button" class="btn btn-ghost" data-scan="rmCode">สแกน</button>
+          </div>
+          <div class="status-line" id="rmStatus"></div>
+        </div>
 
-    <label>จำนวนที่ใช้ <span class="req">*</span></label>
-    <input type="number" id="qty">
+        <div class="field">
+          <label>ชื่อวัตถุดิบ</label>
+          <input id="rmName" type="text" placeholder="ขึ้นอัตโนมัติเมื่อสแกนได้ หรือคีย์เองถ้าสแกนไม่ได้" autocomplete="off">
+        </div>
 
-    <label>ชนิดการแก้ไข <span class="req">*</span></label>
-    <select id="editType">
-      <option value="">-- เลือกชนิดการแก้ไข --</option>
-      <option value="เพิ่ม">เพิ่ม</option>
-      <option value="ทดแทน">ทดแทน</option>
-      <option value="เอาออก">เอาออก</option>
-    </select>
+        <div class="field">
+          <label>จำนวนที่ใช้ <span class="req">*</span></label>
+          <div class="stepper">
+            <button type="button" id="qtyMinus">−</button>
+            <input id="qty" type="number" min="1" step="1" value="1" required>
+            <button type="button" id="qtyPlus">+</button>
+          </div>
+        </div>
 
-    <label>รหัสเดิม (ถ้าทราบ)</label>
-    <div class="field-row">
-      <input type="text" id="oldCode">
-      <button type="button" class="scan-btn" onclick="startScan('oldCode')">⁅ สแกน ⁆</button>
+        <div class="field">
+          <label>ชนิดการแก้ไข <span class="req">*</span></label>
+          <select id="editType" required><option value="">— เลือกชนิดการแก้ไข —</option></select>
+        </div>
+
+        <div class="field">
+          <label>รหัสเดิม (ถ้าทราบ)</label>
+          <div class="scan-row">
+            <input id="oldCode" type="text" placeholder="สแกนหรือพิมพ์รหัสเดิม (ไม่บังคับ)" autocomplete="off">
+            <button type="button" class="btn btn-ghost" data-scan="oldCode">สแกน</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>วันที่นำไปใช้ <span class="req">*</span></label>
+          <input id="useDate" type="date" required>
+        </div>
+
+        <div class="field">
+          <label>รูปถ่าย</label>
+          <div class="photo-pick">
+            <label class="btn btn-ghost" for="photo">📷 ถ่ายรูป/เลือกรูป</label>
+            <input id="photo" type="file" accept="image/*" capture="environment" hidden>
+            <img id="photoThumb" class="photo-thumb" alt="">
+            <button type="button" id="photoClear" class="btn btn-ghost" hidden>ลบรูป</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>หมายเหตุ</label>
+          <textarea id="note" placeholder="ไม่บังคับ"></textarea>
+        </div>
+
+        <div id="saveMsg" class="msg" hidden></div>
+
+        <button type="submit" id="saveBtn" class="btn btn-success btn-block">บันทึกรายการ</button>
+      </form>
+
+      <div class="session-list" id="sessionList" hidden>
+        <div class="msg" style="padding:0 0 8px;text-align:left;color:var(--muted);font-size:13px;">
+          รายการที่บันทึกแล้วของงานนี้
+        </div>
+        <div id="sessionItems"></div>
+      </div>
+
+      <div class="field" style="margin-top:14px;">
+        <button type="button" id="newTask" class="btn btn-ghost btn-block">เปลี่ยนงาน FG ใหม่</button>
+      </div>
     </div>
 
-    <label>PD (ถ้าทราบ)</label>
-    <input type="text" id="pd">
+  </section>
 
-    <label>รหัสงาน FG (ถ้าทราบ)</label>
-    <div class="field-row">
-      <input type="text" id="fgCode">
-      <button type="button" class="scan-btn" onclick="startScan('fgCode')">⁅ สแกน ⁆</button>
+  <!-- ====================== Dashboard ====================== -->
+  <section id="view-dashboard" class="view">
+    <div class="toolbar">
+      <input id="dashSearch" type="search" placeholder="ค้นหา FG code / ชื่องาน / PD">
+      <select id="dashReporter"><option value="">ผู้แจ้งทั้งหมด</option></select>
     </div>
+    <div id="dashList"><div class="msg">กำลังโหลดข้อมูล…</div></div>
+  </section>
+</main>
 
-    <label>ชื่องาน FG</label>
-    <input type="text" id="fgName">
+<!-- ====================== Scanner modal ====================== -->
+<div id="scanModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;">
+  <div style="max-width:480px;margin:10vh auto 0;padding:0 14px;">
+    <div id="reader" style="border-radius:10px;overflow:hidden;background:#000;"></div>
+    <button type="button" id="scanCancel" class="btn btn-ghost btn-block" style="margin-top:10px;background:#fff;">ยกเลิก</button>
+  </div>
+</div>
 
-    <label>วันที่นำไปใช้ <span class="req">*</span></label>
-    <input type="date" id="useDate">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
+  const API_URL = "https://script.google.com/macros/s/AKfycbyl0SVGCDIBSFtR1_aJu-H9eCThos5S2Rqr3Y5eTeWYM2J9cgmYbGsJ0jr3OHdpKJDT/exec";
 
-    <label>รูปถ่าย</label>
-    <button type="button" class="photo-btn" onclick="document.getElementById('photo').click()">📷 ถ่ายรูป</button>
-    <input type="file" id="photo" accept="image/*" capture="environment" style="display:none;">
-    <span id="photoFileName"></span>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const todayStr = () => new Date().toISOString().slice(0, 10);
 
-    <label>หมายเหตุ</label>
-    <textarea id="remark" rows="3"></textarea>
+  async function post(body) {
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch (e) { throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (HTTP " + res.status + ")"); }
+  }
 
-    <button type="button" id="submitBtn" onclick="submitForm()">บันทึกข้อมูล</button>
-  </form>
-
-  <script>
-    // ===== แก้ 2 ค่านี้ให้ตรงกับของจริงก่อนใช้งาน =====
-    const EXEC_URL = 'https://script.google.com/macros/s/AKfycbyl0SVGCDIBSFtR1_aJu-H9eCThos5S2Rqr3Y5eTeWYM2J9cgmYbGsJ0jr3OHdpKJDT/exec';
-    const SCANNER_URL = 'https://appcreatorscmrefthai-code.github.io/qr-scanner/scanner.html';
-    // ===================================================
-
-    function startScan(fieldId) {
-      window.open(SCANNER_URL + '?field=' + fieldId, '_blank', 'width=420,height=650');
-    }
-
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.field) {
-        const el = document.getElementById(e.data.field);
-        if (el) el.value = e.data.value;
-      }
+  // ---------- Tabs ----------
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+      $("view-" + t.dataset.view).classList.add("active");
+      if (t.dataset.view === "dashboard" && !dashLoaded) loadDashboard();
     });
+  });
 
-    document.getElementById('photo').addEventListener('change', function(e) {
-      const nameSpan = document.getElementById('photoFileName');
-      nameSpan.innerText = e.target.files.length > 0 ? '✅ เลือกรูปแล้ว: ' + e.target.files[0].name : '';
-    });
-
-    function validateForm() {
-      if (!reporter.value) { alert('กรุณาเลือกผู้แจ้ง'); return false; }
-      if (!qty.value) { alert('กรุณากรอกจำนวนที่ใช้'); return false; }
-      if (!editType.value) { alert('กรุณาเลือกชนิดการแก้ไข'); return false; }
-      if (!useDate.value) { alert('กรุณาเลือกวันที่นำไปใช้'); return false; }
-      return true;
+  // ---------- Meta (dropdown options) ----------
+  async function loadMeta() {
+    try {
+      const d = await post({ action: "meta" });
+      if (!d.ok) throw new Error(d.error);
+      fillOptions($("reporter"), d.reporters, "— เลือกผู้แจ้ง —");
+      fillOptions($("editType"), d.editTypes, "— เลือกชนิดการแก้ไข —");
+      fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
+    } catch (err) {
+      // เงียบไว้ก็ได้ ฟอร์มยังใช้ค้นหา/สแกนได้ตามปกติ แค่ dropdown จะว่าง
     }
+  }
+  function fillOptions(sel, list, placeholder) {
+    const keep = sel.value;
+    sel.innerHTML = `<option value="">${esc(placeholder)}</option>` +
+      list.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    sel.value = keep;
+  }
 
-    function submitForm() {
-      if (!validateForm()) return;
+  // ---------- ส่วนที่ 1: ข้อมูลงาน (Header) ----------
+  // สแกน/พิมพ์รหัสงาน FG ได้ -> auto เติม เลข PD + ชื่องาน FG
+  // สแกนไม่ได้ -> คีย์ เลข PD หรือ ชื่องาน FG เองตรงๆ โดยปล่อยรหัสงาน FG ว่างไว้ ไม่ต้อง lookup
+  function setStatus(el, cls, text) {
+    el.className = "status-line show" + (cls ? " " + cls : "");
+    el.textContent = text;
+  }
+  function clearStatus(el) {
+    el.className = "status-line";
+    el.textContent = "";
+  }
 
-      const photoInput = document.getElementById('photo');
-      const submitBtn = document.getElementById('submitBtn');
-      submitBtn.disabled = true;
-      submitBtn.innerText = 'กำลังบันทึก...';
+  function updateItemCardVisibility() {
+    const ready = $("fgCode").value.trim() || $("pdNumber").value.trim() || $("fgModel").value.trim();
+    $("itemCard").hidden = !ready;
+  }
 
-      function doSubmit(photoBase64, photoName) {
-        const data = {
-          reporter: reporter.value,
-          replaceCode: replaceCode.value,
-          rmName: rmName.value,
-          qty: qty.value,
-          editType: editType.value,
-          oldCode: oldCode.value,
-          pd: pd.value,
-          fgCode: fgCode.value,
-          fgName: fgName.value,
-          useDate: useDate.value,
-          photoBase64: photoBase64,
-          photoName: photoName,
-          remark: remark.value
-        };
+  let fgTimer = null;
+  $("fgCode").addEventListener("input", () => {
+    clearTimeout(fgTimer);
+    const code = $("fgCode").value.trim();
+    if (!code) { clearStatus($("fgStatus")); updateItemCardVisibility(); return; }
+    fgTimer = setTimeout(() => resolveFG(code), 400);
+  });
 
-        // ส่งเป็น text/plain เพื่อเลี่ยง CORS preflight ที่ Apps Script รับไม่ได้
-        fetch(EXEC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(data)
-        })
-          .then(r => r.json())
-          .then(res => {
-            if (res.status === 'success') {
-              alert('บันทึกสำเร็จ เลขที่งาน: ' + res.jobNo);
-              document.getElementById('bomForm').reset();
-              document.getElementById('photoFileName').innerText = '';
-            } else {
-              alert('เกิดข้อผิดพลาด: ' + (res.message || 'ไม่ทราบสาเหตุ'));
-            }
-          })
-          .catch(err => alert('เกิดข้อผิดพลาด: ' + err.message))
-          .finally(() => {
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'บันทึกข้อมูล';
-          });
-      }
-
-      if (photoInput.files.length > 0) {
-        const reader = new FileReader();
-        reader.onload = e => doSubmit(e.target.result, photoInput.files[0].name);
-        reader.readAsDataURL(photoInput.files[0]);
+  async function resolveFG(code) {
+    setStatus($("fgStatus"), "", "กำลังค้นหา…");
+    try {
+      const d = await post({ action: "lookupFG", code });
+      if (!d.ok) throw new Error(d.error);
+      if (!d.found) {
+        setStatus($("fgStatus"), "err", "ไม่พบรหัสนี้ — คีย์เลข PD หรือชื่องาน FG เองด้านล่างได้");
       } else {
-        doSubmit('', '');
+        $("pdNumber").value = d.pdNumber || "";
+        $("fgModel").value = d.fgModel || "";
+        setStatus($("fgStatus"), "ok", `พบ: ${d.fgModel}${d.pdNumber ? " · PD " + d.pdNumber : ""}`);
       }
+      updateItemCardVisibility();
+    } catch (err) {
+      setStatus($("fgStatus"), "err", "เชื่อมต่อไม่ได้: " + err.message);
     }
-  </script>
+  }
+
+  $("pdNumber").addEventListener("input", updateItemCardVisibility);
+  $("fgModel").addEventListener("input", updateItemCardVisibility);
+
+  $("newTask").addEventListener("click", () => {
+    $("fgCode").value = "";
+    $("pdNumber").value = "";
+    $("fgModel").value = "";
+    clearStatus($("fgStatus"));
+    sessionItems = [];
+    renderSession();
+    resetItemForm();
+    updateItemCardVisibility();
+  });
+
+  // ---------- ส่วนที่ 2: รายการวัตถุดิบ (Item) ----------
+  // สแกน/พิมพ์รหัสที่เอาไปใช้ได้ -> auto เติม ชื่อวัตถุดิบ
+  // สแกนไม่ได้ -> คีย์ ชื่อวัตถุดิบ เองตรงๆ โดยปล่อยรหัสที่เอาไปใช้ว่างไว้
+  let rmTimer = null;
+  $("rmCode").addEventListener("input", () => {
+    clearTimeout(rmTimer);
+    const code = $("rmCode").value.trim();
+    if (!code) { clearStatus($("rmStatus")); return; }
+    rmTimer = setTimeout(() => resolveRM(code), 400);
+  });
+
+  async function resolveRM(code) {
+    setStatus($("rmStatus"), "", "กำลังค้นหา…");
+    try {
+      const d = await post({ action: "lookupRM", code });
+      if (!d.ok) throw new Error(d.error);
+      if (!d.found) {
+        setStatus($("rmStatus"), "err", "ไม่พบรหัสนี้ — คีย์ชื่อวัตถุดิบเองด้านล่างได้");
+      } else {
+        $("rmName").value = d.productName || "";
+        setStatus($("rmStatus"), "ok", `พบ: ${d.productName}${d.unit ? " · หน่วย " + d.unit : ""}`);
+      }
+    } catch (err) {
+      setStatus($("rmStatus"), "err", "เชื่อมต่อไม่ได้: " + err.message);
+    }
+  }
+
+  $("qtyMinus").addEventListener("click", () => {
+    const i = $("qty"); i.value = Math.max(1, (parseInt(i.value, 10) || 1) - 1);
+  });
+  $("qtyPlus").addEventListener("click", () => {
+    const i = $("qty"); i.value = (parseInt(i.value, 10) || 0) + 1;
+  });
+
+  // รูปถ่าย: ย่อขนาดก่อนแปลงเป็น base64 เพื่อให้อัปโหลดเร็วและไม่กินโควต้า
+  let photoData = null; // {base64, mime}
+  $("photo").addEventListener("change", async () => {
+    const file = $("photo").files[0];
+    if (!file) return;
+    try {
+      photoData = await resizeImage_(file, 1280, 0.72);
+      $("photoThumb").src = "data:" + photoData.mime + ";base64," + photoData.base64;
+      $("photoThumb").style.display = "inline-block";
+      $("photoClear").hidden = false;
+    } catch (err) {
+      alert("อ่านรูปไม่สำเร็จ ลองใหม่อีกครั้ง");
+    }
+  });
+  $("photoClear").addEventListener("click", () => {
+    photoData = null;
+    $("photo").value = "";
+    $("photoThumb").style.display = "none";
+    $("photoClear").hidden = true;
+  });
+
+  function resizeImage_(file, maxSize, quality) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.round(width * ratio); height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve({ base64: dataUrl.split(",")[1], mime: "image/jpeg" });
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  $("useDate").value = todayStr();
+
+  function resetItemForm() {
+    $("itemForm").reset();
+    $("useDate").value = todayStr();
+    $("qty").value = 1;
+    $("rmName").value = "";
+    clearStatus($("rmStatus"));
+    photoData = null;
+    $("photo").value = "";
+    $("photoThumb").style.display = "none";
+    $("photoClear").hidden = true;
+    $("saveMsg").hidden = true;
+  }
+
+  $("itemForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const reporter = $("reporter").value;
+    if (!reporter) { $("reporter").focus(); return; }
+
+    const rmCode = $("rmCode").value.trim();
+    const rmName = $("rmName").value.trim();
+    if (!rmCode && !rmName) { $("rmName").focus(); return; }
+
+    const payload = {
+      header: {
+        reporter,
+        fgCode: $("fgCode").value.trim(),
+        pdNumber: $("pdNumber").value.trim(),
+        fgModel: $("fgModel").value.trim(),
+      },
+      item: {
+        rmCode: rmCode,
+        productName: rmName,
+        qty: $("qty").value,
+        editType: $("editType").value,
+        oldCode: $("oldCode").value.trim(),
+        useDate: $("useDate").value,
+        note: $("note").value.trim(),
+      },
+    };
+    if (photoData) { payload.item.photoBase64 = photoData.base64; payload.item.photoMime = photoData.mime; }
+
+    const btn = $("saveBtn"), msg = $("saveMsg");
+    btn.disabled = true; btn.textContent = "กำลังบันทึก…";
+    msg.hidden = true;
+    try {
+      const d = await post({ action: "saveItem", ...payload });
+      if (!d.ok) throw new Error(d.error || "บันทึกไม่สำเร็จ");
+      sessionItems.unshift({
+        rm: rmCode, name: rmName || rmCode,
+        qty: payload.item.qty, editType: payload.item.editType,
+      });
+      renderSession();
+      resetItemForm();
+      msg.className = "msg ok"; msg.textContent = "บันทึกรายการแล้ว"; msg.hidden = false;
+      setTimeout(() => { msg.hidden = true; }, 2500);
+    } catch (err) {
+      msg.className = "msg err"; msg.textContent = err.message; msg.hidden = false;
+    }
+    btn.disabled = false; btn.textContent = "บันทึกรายการ";
+  });
+
+  let sessionItems = [];
+  function renderSession() {
+    const wrap = $("sessionList"), box = $("sessionItems");
+    if (!sessionItems.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    box.innerHTML = sessionItems.map((it) => `
+      <div class="session-item">
+        <div><div class="name">${esc(it.name)}</div><div class="sub">${esc(it.rm)}</div></div>
+        <div>${editBadge(it.editType)} <span class="sub">× ${esc(it.qty)}</span></div>
+      </div>`).join("");
+  }
+
+  function editBadge(type) {
+    const map = { "เพิ่ม": "add", "ทดแทน (ชั่วคราว)": "temp", "ทดแทน (ถาวร)": "perm", "เอาออก": "remove" };
+    const cls = map[type] || "temp";
+    return `<span class="badge ${cls}">${esc(type)}</span>`;
+  }
+
+  // ---------- Dashboard ----------
+  let dashLoaded = false;
+  let dashItems = [];
+
+  async function loadDashboard() {
+    $("dashList").innerHTML = `<div class="msg">กำลังโหลดข้อมูล…</div>`;
+    try {
+      const d = await post({ action: "dashboard" });
+      if (!d.ok) throw new Error(d.error);
+      dashItems = d.items;
+      dashLoaded = true;
+      renderDashboard();
+    } catch (err) {
+      $("dashList").innerHTML = `<div class="msg err">โหลดข้อมูลไม่ได้: ${esc(err.message)}</div>
+        <div class="msg"><button type="button" class="btn btn-ghost" onclick="loadDashboard()">ลองใหม่</button></div>`;
+    }
+  }
+
+  function renderDashboard() {
+    const q = $("dashSearch").value.trim().toLowerCase();
+    const reporterFilter = $("dashReporter").value;
+
+    const filtered = dashItems.filter((it) => {
+      if (reporterFilter && it.reporter !== reporterFilter) return false;
+      if (!q) return true;
+      return (it.fgCode + " " + it.fgModel + " " + it.pdNumber).toLowerCase().includes(q);
+    });
+
+    const tasks = new Map(); // key -> {fgCode, fgModel, pdNumber, items:[], last}
+    filtered.forEach((it) => {
+      const key = it.fgCode || it.pdNumber || it.fgModel || "(ไม่ระบุงาน)";
+      if (!tasks.has(key)) tasks.set(key, { fgCode: it.fgCode, fgModel: it.fgModel, pdNumber: it.pdNumber, items: [], last: it.date });
+      const t = tasks.get(key);
+      t.items.push(it);
+      if (String(it.date) > String(t.last)) t.last = it.date;
+      if (!t.fgCode && it.fgCode) t.fgCode = it.fgCode;
+      if (!t.fgModel && it.fgModel) t.fgModel = it.fgModel;
+      if (!t.pdNumber && it.pdNumber) t.pdNumber = it.pdNumber;
+    });
+
+    const list = Array.from(tasks.values()).sort((a, b) => String(b.last).localeCompare(String(a.last)));
+
+    if (!list.length) { $("dashList").innerHTML = `<div class="msg">ไม่พบข้อมูล</div>`; return; }
+
+    $("dashList").innerHTML = list.map((t, i) => `
+      <div class="task-card">
+        <div class="task-head" data-idx="${i}">
+          <div>
+            <div class="code">${esc(t.fgCode || t.fgModel || t.pdNumber || "(ไม่ระบุงาน)")}</div>
+            <div class="model">${esc(t.fgModel)}${t.pdNumber ? " · PD " + esc(t.pdNumber) : ""}</div>
+            <div class="task-meta">อัปเดตล่าสุด ${esc(t.last)}</div>
+          </div>
+          <div class="task-count">${t.items.length} รายการ</div>
+        </div>
+        <div class="task-items" id="task-${i}">
+          ${t.items.map((it) => `
+            <div class="item-row">
+              <div class="r1">
+                <div class="rm">${esc(it.rmName || it.rmCode)}</div>
+                ${editBadge(it.editType)}
+              </div>
+              <div class="r2">${esc(it.rmCode)} · จำนวน ${esc(it.qty)}${it.oldCode ? " · รหัสเดิม " + esc(it.oldCode) : ""}</div>
+              <div class="r2">ผู้แจ้ง ${esc(it.reporter)} · วันที่นำไปใช้ ${esc(it.useDate)}${it.note ? " · " + esc(it.note) : ""}</div>
+              ${it.photo ? `<a class="photo-link" href="${esc(it.photo)}" target="_blank" rel="noopener">ดูรูปถ่าย</a>` : ""}
+            </div>`).join("")}
+        </div>
+      </div>`).join("");
+
+    document.querySelectorAll(".task-head").forEach((h) => {
+      h.addEventListener("click", () => $("task-" + h.dataset.idx).classList.toggle("open"));
+    });
+  }
+
+  $("dashSearch").addEventListener("input", renderDashboard);
+  $("dashReporter").addEventListener("change", renderDashboard);
+
+  // ---------- Scanner (ใช้ร่วมกันทุกช่อง) ----------
+  let scanner = null, scanTarget = null;
+
+  document.querySelectorAll("[data-scan]").forEach((btn) => {
+    btn.addEventListener("click", () => openScanner(btn.dataset.scan));
+  });
+
+  async function openScanner(targetId) {
+    scanTarget = targetId;
+    $("scanModal").style.display = "block";
+    scanner = new Html5Qrcode("reader", { experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+    try {
+      await scanner.start({ facingMode: "environment" }, { fps: 10 }, onScanResult, () => {});
+    } catch (err) {
+      closeScanner();
+      alert("เปิดกล้องไม่ได้ ตรวจสิทธิ์กล้องของเบราว์เซอร์");
+    }
+  }
+
+  async function closeScanner() {
+    if (scanner) {
+      try { await scanner.stop(); scanner.clear(); } catch (e) {}
+      scanner = null;
+    }
+    $("scanModal").style.display = "none";
+  }
+
+  function onScanResult(text) {
+    if (!scanner) return;
+    if (navigator.vibrate) navigator.vibrate(80);
+    const id = scanTarget;
+    closeScanner();
+    if (!id) return;
+    $(id).value = text.trim();
+    $(id).dispatchEvent(new Event("input"));
+  }
+
+  $("scanCancel").addEventListener("click", closeScanner);
+
+  // ---------- เริ่มต้น ----------
+  loadMeta();
+</script>
 </body>
 </html>
