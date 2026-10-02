@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>อัปเดตสถานการณ์รถบนถนน</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>อัปเดตสถานการณ์รถบนถนน</h1>
+  <p class="sub">ส่งอัปเดตระหว่างทางได้หลายครั้ง ลงงานเสร็จแต่ละจุดให้กด "ลงงานเสร็จ"</p>
+  <div id="demo" class="msg info" hidden>โหมดตัวอย่าง: ยังไม่ได้ใส่ API_URL ใน config.js ข้อมูลจะไม่ถูกบันทึก</div>
+  <div id="msg" class="msg err" hidden role="alert"></div>
+
+  <div id="formBox">
+    <div class="card">
+      <h2>1. สแกน QR Task Code</h2>
+      <div id="reader" hidden></div>
+      <button class="btn primary" id="scanBtn" type="button">เปิดกล้องสแกน QR</button>
+      <div id="taskBox" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>2. รูปสถานการณ์บนถนน <small>สูงสุด 5 รูป รวมไม่เกิน 5 MB</small></h2>
+      <div id="pkRoad"></div>
+    </div>
+
+    <div class="card">
+      <h2><label for="note">3. หมายเหตุ</label></h2>
+      <textarea id="note" maxlength="2000" placeholder="เช่น รถติด ถึงจุดส่งแรกแล้ว"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>4. ลงงานที่จุดส่ง</h2>
+      <div id="stopBox"></div>
+      <h2 style="margin-top:14px">รูปลงงาน <small>สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></h2>
+      <div id="pkUnload"></div>
+    </div>
+
+    <div class="card stamp"><span>วันที่และเวลา (บันทึกอัตโนมัติ)</span><b id="stamp"></b></div>
+
+    <div id="prog" hidden><div id="progText" class="meter"></div><div class="bar"><i id="progBar"></i></div><br></div>
+    <div class="btns">
+      <button class="btn primary" type="button" data-send="save">ส่งอัปเดต</button>
+      <button class="btn finish" type="button" data-send="finish">ลงงานเสร็จ</button>
+    </div>
+  </div>
+
+  <div id="doneBox" class="card done" hidden>
+    <div class="ok">✓</div><p id="doneText"></p>
+    <button class="btn" id="again" type="button">ส่งรายการถัดไป</button>
+  </div>
+</div>
+
+<dialog id="finDlg">
+  <p id="finText"></p>
+  <div class="btns"><button class="btn finish" id="finYes" type="button">ยืนยันจบงาน</button><button class="btn ghost" id="finNo" type="button">ยกเลิก</button></div>
+</dialog>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="form.js"></script>
+<script>
+DeliveryForm.init({
+  form: 'road',
+  pickers: [
+    { key: 'road', kind: 'road', el: 'pkRoad', max: 5, maxMB: 5, label: 'รูปสถานการณ์บนถนน' },
+    { key: 'unload', kind: 'unload', el: 'pkUnload', max: 20, maxMB: 50, label: 'รูปลงงาน' }
+  ]
+});
+</script>
+</body>
+</html>

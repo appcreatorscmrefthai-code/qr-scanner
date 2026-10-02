@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery Plan Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b1120; --panel:#131c2e; --panel2:#1a2540; --rule:#26324d;
+  --text:#eaf0fa; --muted:#8e9bb3;
+  --waiting:#8e9bb3; --departed:#4aa8ff; --road:#f6b93b; --arrived:#34d08c; --late:#ff4d61;
+  --tw:clamp(54px,5.2vw,96px);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:"Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif;
+  display:flex;flex-direction:column;min-height:100vh;font-size:clamp(14px,1.15vw,22px)}
+button{font:inherit;color:inherit}
+
+/* ---- header ---- */
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:clamp(10px,1.2vw,22px) clamp(16px,2.2vw,44px);background:linear-gradient(180deg,#1b2742,#141d31);
+  border-bottom:1px solid var(--rule)}
+h1{margin:0;font-size:clamp(20px,2.3vw,44px);font-weight:700;letter-spacing:.01em}
+h1 small{font-weight:500;color:var(--muted);font-size:.55em;margin-left:.6em}
+.clock{font-size:clamp(20px,2.3vw,44px);font-weight:700;font-variant-numeric:tabular-nums}
+.datepick{background:var(--panel2);border:1px solid var(--rule);color:var(--text);border-radius:8px;
+  padding:4px 8px;font:inherit;font-size:.8em;color-scheme:dark}
+.right{display:flex;align-items:center;gap:14px}
+
+.summary{display:flex;gap:10px;flex-wrap:wrap;padding:clamp(8px,.8vw,16px) clamp(16px,2.2vw,44px)}
+.sum{display:flex;align-items:baseline;gap:8px;padding:.3em .9em;border-radius:999px;background:var(--panel);
+  border:1px solid var(--rule)}
+.sum b{font-size:1.25em;font-variant-numeric:tabular-nums}
+.sum i{width:.65em;height:.65em;border-radius:50%;background:var(--c);align-self:center}
+.sum.late.on{border-color:var(--late);animation:glow 1s steps(2,jump-none) infinite}
+
+/* ---- board ---- */
+main{flex:1;display:flex;flex-direction:column;padding:0 clamp(16px,2.2vw,44px);min-height:0}
+.cols,.row{display:grid;grid-template-columns:minmax(120px,12vw) 1fr minmax(240px,29vw);column-gap:clamp(10px,1.4vw,28px)}
+.cols{color:var(--muted);font-weight:600;padding:.3em 0;border-bottom:1px solid var(--rule)}
+.cols div:nth-child(2){text-align:center}
+.rows{flex:1;display:flex;flex-direction:column;min-height:0}
+.row{flex:0 0 20%;align-items:center;border-bottom:1px solid var(--rule);position:relative;--c:var(--waiting);
+  padding:.4em 0}
+.row.s-departed{--c:var(--departed)} .row.s-road{--c:var(--road)} .row.s-arrived{--c:var(--arrived)}
+.row.late{--c:var(--late)}
+.row.late::before{content:"";position:absolute;inset:4px -10px;border-radius:12px;border:2px solid var(--late);
+  background:rgba(255,77,97,.10);animation:blink 1s steps(2,jump-none) infinite;pointer-events:none}
+
+.time{font-size:1.5em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.time span{font-size:.6em;font-weight:500;color:var(--muted);margin-left:.4em}
+.chip{display:inline-block;margin-top:.3em;padding:.1em .7em;border-radius:6px;background:var(--panel2);
+  border:1px solid var(--rule);font-size:.82em;color:#c9d4e8;font-variant-numeric:tabular-nums}
+.stops{list-style:none;margin:0;padding:0;display:grid;gap:.22em;min-width:0}
+.stops li{display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;column-gap:.5em;min-width:0;line-height:1.25}
+.num{display:inline-grid;place-items:center;width:1.45em;height:1.45em;border-radius:50%;border:2px solid var(--c);
+  font-size:.72em;font-weight:700;color:var(--c);background:var(--bg);font-variant-numeric:tabular-nums}
+.stops b{font-size:1.12em;font-variant-numeric:tabular-nums}
+.stops .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.stops .act{font-size:.8em;font-weight:600;color:var(--arrived);white-space:nowrap;font-variant-numeric:tabular-nums}
+.stops li.done .num,.dot.done{background:var(--arrived);border-color:var(--arrived);color:#06101f}
+.stops li.done .nm,.stops li.done b{color:var(--muted)}
+.stops li.over .num,.dot.over{border-color:var(--late);color:var(--late)}
+.stops li.over b{color:var(--late)}
+.stops li.slow .act{color:var(--road)}
+.dot{position:absolute;top:calc(var(--tw)*.62 + .2em + 1px);left:calc(var(--q) * 100%);transform:translate(-50%,-50%)}
+
+/* ---- track ---- */
+.track{position:relative;height:calc(var(--tw)*.62 + 2.9em);margin:0 calc(var(--tw)*.35)}
+.line{position:absolute;left:0;right:0;top:calc(var(--tw)*.62 + .2em);border-top:2px dashed var(--c);opacity:.75}
+.line::before{content:"";position:absolute;top:-6px;left:-5px;width:10px;height:10px;border-radius:50%;background:var(--c)}
+.mover{position:absolute;z-index:2;top:0;left:calc(var(--p) * 100%);width:var(--tw);margin-left:calc(var(--tw)/-2);
+  transition:left 1.2s ease;display:flex;flex-direction:column;align-items:center}
+.truck{all:unset;cursor:pointer;position:relative;width:var(--tw);height:calc(var(--tw)*.62);color:var(--text);display:block}
+.truck svg{width:100%;height:100%;display:block}
+.truck:focus-visible{outline:2px solid var(--departed);outline-offset:4px;border-radius:8px}
+.truck svg.bubble{position:absolute;left:auto;right:-.15em;top:-.5em;width:calc(var(--tw)*.34);height:calc(var(--tw)*.3);color:var(--road)}
+.stat{margin-top:1.05em;white-space:nowrap;font-size:.8em;font-weight:600;color:var(--c)}
+.row.right .stat{align-self:flex-end}.row.left .stat{align-self:flex-start}
+.row.late .truck{color:#fff}
+.row.late .mover::before{content:"DELAY";position:absolute;top:-1.5em;left:50%;transform:translateX(-50%);
+  background:var(--late);color:#fff;font-size:.72em;font-weight:700;letter-spacing:.08em;padding:.05em .6em;border-radius:5px;
+  animation:blink 1s steps(2,jump-none) infinite}
+
+/* ---- hover card ---- */
+.tip{position:absolute;top:calc(var(--tw)*.62 + 2.8em);left:50%;transform:translateX(-50%);z-index:20;width:max-content;
+  max-width:min(30em,60vw);background:#243152;border:1px solid #3a4a72;border-radius:10px;padding:.7em 1em;font-size:.82em;
+  line-height:1.55;box-shadow:0 12px 30px rgba(0,0,0,.55);display:none;text-align:left;white-space:normal}
+.tip b{color:var(--muted);font-weight:500}
+.tip em{display:block;margin-top:.3em;font-style:normal;color:var(--departed)}
+.row.up .tip{top:auto;bottom:calc(100% + .4em)}
+.row.right .tip{left:auto;right:0;transform:none}
+.row.left .tip{left:0;transform:none}
+@media (hover:hover){.mover:hover .tip,.truck:focus-visible ~ .tip{display:block}}
+
+/* ---- footer ---- */
+footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:clamp(8px,.8vw,16px) clamp(16px,2.2vw,44px);color:var(--muted);font-size:.85em}
+.legend{display:flex;gap:1.2em;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--c);margin-right:.4em}
+.pager{display:flex;align-items:center;gap:.6em}
+.pager button{all:unset;cursor:pointer;width:2em;height:2em;border-radius:50%;background:var(--panel2);text-align:center;
+  line-height:2em;border:1px solid var(--rule)}
+.pager button:focus-visible{outline:2px solid var(--departed)}
+.dots{display:flex;gap:.4em}.dots i{width:.6em;height:.6em;border-radius:50%;background:var(--rule)}.dots i.on{background:var(--text)}
+.empty{flex:1;display:grid;place-items:center;color:var(--muted);font-size:1.3em;text-align:center;padding:3em 1em}
+.banner{background:#4a3a10;color:#ffe2a0;padding:.4em 1em;text-align:center;font-size:.85em}
+
+/* ---- modal ---- */
+dialog{background:var(--panel);color:var(--text);border:1px solid #3a4a72;border-radius:14px;padding:0;
+  width:min(720px,94vw);max-height:90vh;font-size:clamp(14px,1vw,18px)}
+dialog::backdrop{background:rgba(3,6,14,.72)}
+.dh{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--rule);
+  position:sticky;top:0;background:var(--panel)}
+.dh h2{margin:0;font-size:1.25em}
+.dh button{all:unset;cursor:pointer;padding:.2em .7em;border-radius:8px;background:var(--panel2);border:1px solid var(--rule)}
+.db{padding:14px 18px 20px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.25em 1em;margin:0 0 1em}
+.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.log{border-top:1px solid var(--rule);padding-top:.8em;margin-top:.8em}
+.log h3{margin:0 0 .3em;font-size:1em}
+.log p{margin:.2em 0;color:#c9d4e8;white-space:pre-wrap}
+.log .t{color:var(--muted);font-size:.9em}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:.5em}
+.thumbs a{display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--panel2);border:1px solid var(--rule)}
+.thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+.badge{display:inline-block;padding:.05em .7em;border-radius:999px;background:var(--c);color:#08101f;font-weight:700;font-size:.85em}
+
+@keyframes blink{50%{opacity:.15}}
+@keyframes glow{50%{box-shadow:0 0 0 3px rgba(255,77,97,.45)}}
+
+/* ---- มือถือ ---- */
+@media (max-width:760px){
+  :root{--tw:60px}
+  html,body{height:auto}
+  body{font-size:15px}
+  .cols{display:none}
+  main,.rows{display:block}
+  .row{flex:none;grid-template-columns:1fr;row-gap:.5em;padding:.9em 0 .6em}
+  .row .pick{display:flex;align-items:center;gap:.6em;flex-wrap:wrap}
+  .row .pick .chip{margin-top:0}
+  .row .track{grid-row:3;margin-top:1.4em}
+  .row.late::before{inset:2px -8px}
+  .time{font-size:1.25em}
+  .tip{display:none!important}
+}
+</style>
+</head>
+<body>
+<div id="banner" class="banner" hidden></div>
+<header>
+  <h1 id="title">Delivery Plan</h1>
+  <div class="right">
+    <input class="datepick" id="datepick" type="date" aria-label="เลือกวันที่">
+    <div class="clock" id="clock"></div>
+  </div>
+</header>
+<div class="summary" id="summary"></div>
+<main>
+  <div class="cols"><div>Pickup Time</div><div>สถานะรถ</div><div>จุดส่ง / Arrival Time</div></div>
+  <div class="rows" id="rows"></div>
+</main>
+<footer>
+  <div class="legend">
+    <span style="--c:var(--waiting)">ยังไม่ออก</span><span style="--c:var(--departed)">ออกแล้ว</span>
+    <span style="--c:var(--road)">กำลังส่ง</span><span style="--c:var(--arrived)">จบงาน</span>
+    <span style="--c:var(--late)">ล่าช้า</span>
+  </div>
+  <div class="pager" id="pager"></div>
+  <div id="updated"></div>
+</footer>
+<dialog id="dlg"><div class="dh"><h2 id="dlgTitle"></h2><button id="dlgClose">ปิด</button></div><div class="db" id="dlgBody"></div></dialog>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-truck" viewBox="0 0 100 62">
+    <g fill="currentColor">
+      <rect x="2" y="14" width="22" height="4" rx="2"/><rect x="8" y="24" width="16" height="4" rx="2"/><rect x="2" y="34" width="22" height="4" rx="2"/>
+      <path d="M30 6h38a3 3 0 0 1 3 3v35H30a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3z"/>
+      <path d="M74 18h11a4 4 0 0 1 3.4 1.9l7.7 12.3a4 4 0 0 1 .6 2.1V44H74z"/>
+      <rect x="27" y="46" width="70" height="4" rx="2"/>
+    </g>
+    <path d="M79 23h6l5.5 9H79z" fill="var(--bg)"/>
+    <circle cx="43" cy="51" r="8.5" fill="var(--bg)"/><circle cx="43" cy="51" r="5.5" fill="currentColor"/>
+    <circle cx="82" cy="51" r="8.5" fill="var(--bg)"/><circle cx="82" cy="51" r="5.5" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-bubble" viewBox="0 0 36 32">
+    <path fill="currentColor" d="M18 2C8.6 2 1 7.8 1 15c0 3.7 2 7 5.3 9.4L5 31l7.4-4.1c1.8.4 3.7.6 5.6.6 9.4 0 17-5.8 17-13S27.4 2 18 2z"/>
+  </symbol>
+</svg>
+
+<script src="config.js"></script>
+<script>
+const CFG = window.APP_CONFIG || {};
+const DEMO = !CFG.API_URL;
+const PER = CFG.PER_PAGE || 5;
+const DAYS = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+const LABEL = {waiting:'ยังไม่ออก', departed:'ออกแล้ว', road:'กำลังส่ง', arrived:'จบงาน'};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const urlDate = new URLSearchParams(location.search).get('date');
+let pickedDate = urlDate || null;      // null = ตามวันปัจจุบันเสมอ
+let tasks = [], page = 0, lastSig = '';
+
+/* ---------- เวลา (ยึดเวลาไทยเสมอ) ---------- */
+const DEMO_NOW = new Date('2026-09-30T10:15:00+07:00');
+const now = () => DEMO ? DEMO_NOW : new Date();
+const bkk = d => new Date(d.getTime() + 7 * 3600e3).toISOString();   // yyyy-mm-ddTHH:MM ในเวลาไทย
+const today = () => bkk(now()).slice(0, 10);
+const hhmm = d => bkk(d).slice(11, 16);
+const at = (date, t) => new Date(`${date}T${t || '00:00'}:00+07:00`);
+const shortT = t => String(t || '').replace(/^0/, '');
+
+/* ---------- สถานะ ----------
+   รถ 1 คันมีจุดส่ง 1-3 จุด ตำแหน่งรถ: ต้นทาง = 0, จุดที่ i = i/n, จุดสุดท้าย = 1 (จบงาน) */
+function state(t) {
+  const stops = t.stops || [], n = Math.max(1, stops.length), logs = t.roadLogs || [];
+  const done = {};                                   // เลขจุด -> เวลาที่ลงงานเสร็จ
+  logs.forEach(l => { let k = Number(l.stop) || 0; if (!k && l.finish) k = n; if (k && !done[k]) done[k] = new Date(l.time); });
+  const finished = !!done[n];
+  let last = 0; for (let i = 1; i <= n; i++) if (done[i]) last = i;
+  const lastT = last ? done[last] : null;
+  const upd = logs.filter(l => !(Number(l.stop) || l.finish));
+  const fresh = upd.filter(l => !lastT || new Date(l.time) > lastT);   // อัปเดตบนถนนหลังจุดล่าสุด
+  let s, when = null, p, label;
+  if (finished) { s = 'arrived'; when = done[n]; p = 1; label = 'จบงาน'; }
+  else if (fresh.length) { s = 'road'; when = new Date(fresh[fresh.length - 1].time); p = (last + .5) / n; label = 'อยู่บนถนน'; }
+  else if (last) { s = 'road'; when = lastT; p = last / n; label = `ส่งจุด ${last}/${n} แล้ว`; }
+  else if (t.pickupLog) { s = 'departed'; when = new Date(t.pickupLog.time); p = .25 / n; label = 'ออกแล้ว'; }
+  else { s = 'waiting'; p = 0; label = 'ยังไม่ออก'; }
+
+  const nowT = now(), over = {};
+  let late = false, why = '';
+  if (!finished) {
+    stops.forEach((st, i) => {
+      if (!done[i + 1] && st.arrival && nowT > at(t.date, st.arrival)) {
+        over[i + 1] = true;
+        if (!late) { late = true; why = `เลยเวลาถึงจุดที่ ${i + 1} (${shortT(st.arrival)}) แล้วยังไม่ลงงาน`; }
+      }
+    });
+    if (!late && s === 'departed' && nowT - when > (CFG.NO_ROAD_UPDATE_MIN || 60) * 60e3) {
+      late = true; why = `รถออกเกิน ${CFG.NO_ROAD_UPDATE_MIN || 60} นาที ยังไม่มีอัปเดตสถานการณ์บนถนน`;
+    }
+  }
+  return { s, when, p, label, late, why, done, over, n, bubble: upd.length > 0 };
+}
+
+/* ---------- โหลดข้อมูล ---------- */
+async function load() {
+  const date = pickedDate || today();
+  try {
+    let data;
+    if (DEMO) data = { ok: true, tasks: demoTasks().filter(t => t.date === date) };
+    else data = await (await fetch(`${CFG.API_URL}?action=plan&date=${date}`)).json();
+    if (!data.ok) throw new Error(data.error);
+    tasks = data.tasks.sort((a, b) => (a.pickup || '').localeCompare(b.pickup || '') || a.taskCode.localeCompare(b.taskCode));
+    $('updated').textContent = 'อัปเดตล่าสุด ' + hhmm(new Date()) + ' น.';
+  } catch (e) {
+    $('updated').textContent = 'โหลดข้อมูลไม่สำเร็จ: ' + e.message;
+  }
+  render();
+}
+
+function render() {
+  const date = pickedDate || today();
+  const d = at(date, '12:00');
+  const [y, m, dd] = date.split('-');
+  $('title').innerHTML = `Delivery Plan ${DAYS[new Date(d.getTime() + 7 * 3600e3).getUTCDay()]} ${dd}-${m}-${y}`;
+  if ($('datepick').value !== date) $('datepick').value = date;
+
+  const st = tasks.map(state);
+  const cnt = { waiting: 0, departed: 0, road: 0, arrived: 0 };
+  st.forEach(x => cnt[x.s]++);
+  const lateN = st.filter(x => x.late).length;
+  $('summary').innerHTML =
+    `<div class="sum"><span>ทั้งหมด</span><b>${tasks.length}</b></div>` +
+    Object.keys(cnt).map(k => `<div class="sum" style="--c:var(--${k})"><i></i><span>${LABEL[k]}</span><b>${cnt[k]}</b></div>`).join('') +
+    `<div class="sum late ${lateN ? 'on' : ''}" style="--c:var(--late)"><i></i><span>ล่าช้า</span><b>${lateN}</b></div>`;
+
+  const pages = Math.max(1, Math.ceil(tasks.length / PER));
+  if (page >= pages) page = 0;
+  const slice = tasks.slice(page * PER, page * PER + PER);
+
+  if (!tasks.length) {
+    $('rows').innerHTML = `<div class="empty">ไม่มีแผนจัดส่งของวันที่ ${dd}-${m}-${y}</div>`;
+  } else {
+    $('rows').innerHTML = slice.map((t, i) => {
+      const x = st[page * PER + i];
+      const side = x.p > .8 ? 'right' : x.p < .1 ? 'left' : '';
+      const dots = (t.stops || []).map((st, k) => `<span class="num dot ${x.done[k + 1] ? 'done' : x.over[k + 1] ? 'over' : ''}" style="--q:${(k + 1) / x.n}">${x.done[k + 1] ? '✓' : k + 1}</span>`).join('');
+      const list = (t.stops || []).map((st, k) => {
+        const d = x.done[k + 1], slow = d && st.arrival && d > at(t.date, st.arrival);
+        return `<li class="${d ? 'done' : x.over[k + 1] ? 'over' : ''} ${slow ? 'slow' : ''}"><span class="num">${d ? '✓' : k + 1}</span><b>${esc(shortT(st.arrival))}</b>
+          <span class="nm" title="${esc(st.name)}">${esc(st.name)}</span><span class="act">${d ? 'ถึง ' + hhmm(d) : ''}</span></li>`;
+      }).join('');
+      return `<article class="row s-${x.s} ${x.late ? 'late' : ''} ${i >= 3 ? 'up' : ''} ${side}" style="--p:${x.p}">
+        <div class="pick"><div class="time">${esc(shortT(t.pickup))}<span>${esc(CFG.ORIGIN || '')}</span></div>
+          <span class="chip">${esc(t.taskCode)}</span>${t.client ? ` <span class="chip">${esc(t.client)}</span>` : ''}</div>
+        <div class="track"><div class="line"></div>${dots}
+          <div class="mover">
+            <button class="truck" data-code="${esc(t.taskCode)}" aria-label="ดูรายละเอียด ${esc(t.taskCode)} ${x.label}${x.late ? ' ล่าช้า' : ''}">
+              <svg><use href="#i-truck"/></svg>${x.bubble ? '<svg class="bubble"><use href="#i-bubble"/></svg>' : ''}</button>
+            <div class="stat">${x.label}${x.when ? ' ' + hhmm(x.when) : ''}</div>
+            <div class="tip">${tipHtml(t, x)}</div>
+          </div></div>
+        <div class="arr"><ol class="stops">${list}</ol></div>
+      </article>`;
+    }).join('');
+  }
+
+  $('pager').innerHTML = pages > 1
+    ? `<button id="prev" aria-label="หน้าก่อน">‹</button><div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === page ? 'on' : ''}"></i>`).join('')}</div>
+       <span>หน้า ${page + 1}/${pages}</span><button id="next" aria-label="หน้าถัดไป">›</button>` : '';
+  if (pages > 1) {
+    $('prev').onclick = () => turn(-1);
+    $('next').onclick = () => turn(1);
+  }
+}
+
+function tipHtml(t, x) {
+  return `<div><b>รถขนส่ง :</b> ${esc(t.transport || '-')}</div>
+    <div><b>ชื่อบริษัทขนส่ง :</b> ${esc(t.company || '-')}</div>
+    <div><b>ชื่อผู้ขับ :</b> ${esc(t.driver || '-')}</div>
+    <div><b>เบอร์โทรผู้ขับ :</b> ${esc(t.phone || '-')}</div>
+    ${x.late ? `<div style="color:var(--late);font-weight:600">${esc(x.why)}</div>` : ''}
+    <em>คลิกที่รถเพื่อดูรูปและหมายเหตุ</em>`;
+}
+
+function turn(step) {
+  const pages = Math.max(1, Math.ceil(tasks.length / PER));
+  page = (page + step + pages) % pages;
+  render();
+}
+
+/* ---------- รายละเอียด ---------- */
+const thumbs = ids => ids && ids.length ? `<div class="thumbs">${ids.map(id =>
+  `<a href="https://drive.google.com/file/d/${esc(id)}/view" target="_blank" rel="noopener"><img loading="lazy" alt="รูป" src="https://drive.google.com/thumbnail?id=${esc(id)}&sz=w300"></a>`).join('')}</div>` : '';
+
+function openDetail(code) {
+  const t = tasks.find(x => x.taskCode === code);
+  if (!t) return;
+  const x = state(t);
+  $('dlgTitle').textContent = t.taskCode;
+  let h = `<p><span class="badge" style="--c:var(--${x.late ? 'late' : x.s})">${x.label}${x.late ? ' · ล่าช้า' : ''}</span>
+      ${x.late ? `<span style="color:var(--late)"> ${esc(x.why)}</span>` : ''}</p>
+    <dl class="kv">
+      <dt>Client</dt><dd>${esc(t.client || '-')}</dd><dt>Pickup</dt><dd>${esc(t.pickup)} น.</dd>
+      ${(t.stops || []).map((st, k) => `<dt>จุดส่ง ${k + 1}</dt><dd>${esc(st.arrival)} น. · ${esc(st.name)}
+        ${x.done[k + 1] ? `<span style="color:var(--arrived)"> ✓ ถึง ${hhmm(x.done[k + 1])}</span>` : x.over[k + 1] ? '<span style="color:var(--late)"> เลยเวลา</span>' : ''}</dd>`).join('')}
+      <dt>รถขนส่ง</dt><dd>${esc(t.transport || '-')}</dd><dt>บริษัทขนส่ง</dt><dd>${esc(t.company || '-')}</dd>
+      <dt>ผู้ขับ</dt><dd>${esc(t.driver || '-')}</dd>
+      <dt>เบอร์โทร</dt><dd>${t.phone ? `<a style="color:var(--departed)" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : '-'}</dd>
+    </dl>`;
+  h += `<div class="log"><h3>อัปรูปส่งงาน</h3>`;
+  h += t.pickupLog ? `<div class="t">${hhmm(new Date(t.pickupLog.time))} น.</div>${t.pickupLog.note ? `<p>${esc(t.pickupLog.note)}</p>` : ''}${thumbs(t.pickupLog.photos)}`
+                   : `<div class="t">ยังไม่มีข้อมูล</div>`;
+  h += `</div><div class="log"><h3>อัปเดตสถานการณ์รถบนถนน</h3>`;
+  if (!(t.roadLogs || []).length) h += `<div class="t">ยังไม่มีข้อมูล</div>`;
+  (t.roadLogs || []).slice().reverse().forEach(l => {
+    h += `<div style="margin-bottom:.9em"><div class="t">${hhmm(new Date(l.time))} น. ${Number(l.stop) ? `<span class="badge" style="--c:var(--road)">ลงงานจุดที่ ${Number(l.stop)}</span> ` : ''}${l.finish ? '<span class="badge" style="--c:var(--arrived)">จบงาน</span>' : ''}</div>
+      ${l.note ? `<p>${esc(l.note)}</p>` : ''}${thumbs(l.road)}${l.unload && l.unload.length ? `<div class="t" style="margin-top:.5em">รูปลงงาน</div>${thumbs(l.unload)}` : ''}</div>`;
+  });
+  h += `</div>`;
+  $('dlgBody').innerHTML = h;
+  $('dlg').showModal();
+}
+$('rows').addEventListener('click', e => { const b = e.target.closest('.truck'); if (b) openDetail(b.dataset.code); });
+$('dlgClose').onclick = () => $('dlg').close();
+$('dlg').addEventListener('click', e => { if (e.target === $('dlg')) $('dlg').close(); });
+
+/* ---------- นาฬิกา / รอบการทำงาน ---------- */
+function tick() { $('clock').textContent = 'เวลา ' + hhmm(now()).replace(':', '.') + ' น.'; }
+$('datepick').onchange = e => { pickedDate = e.target.value || null; page = 0; load(); };
+if (DEMO) { $('banner').hidden = false; $('banner').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ใส่ API_URL ใน config.js (จำลองเวลา 10.15 น. วันที่ 30-09-2026)'; pickedDate = pickedDate || '2026-09-30'; }
+tick(); load();
+setInterval(tick, 10e3);
+setInterval(() => { if (!$('dlg').open) render(); }, 30e3);                       // คำนวณล่าช้าใหม่ตามเวลา
+setInterval(load, (CFG.REFRESH_SEC || 60) * 1e3);
+setInterval(() => { if (!$('dlg').open) turn(1); }, (CFG.ROTATE_SEC || 15) * 1e3);
+
+/* ---------- ข้อมูลตัวอย่าง (จาก Delivery_Plan.xlsx) ---------- */
+function demoTasks() {
+  const P = 'บริษัท ปทุม ทรานสปอร์ต จำกัด', D = '2026-09-30', T = h => `${D}T${h}:00+07:00`;
+  const S = (...a) => a.map(([name, arrival]) => ({ name, arrival }));
+  const R = (time, note, stop, finish) => ({ time: T(time), note, road: [], unload: [], stop: stop || 0, finish: !!finish });
+  return [
+    { taskCode:'D20260930-01', date:D, stops:S(['SYSTPO1036','10:30']), client:'LN26-547', transport:'min : 4W 1.66 x 2.49 x 1.96 m 3 ฒฒ 2192', pickup:'08:30', company:P, driver:'สายชล พวงรัตน์', phone:'095-2688556',
+      pickupLog:{ time:T('08:35'), note:'ขึ้นของครบ', photos:[] }, roadLogs:[] },
+    { taskCode:'D20260930-02', date:D, stops:S(['UTAIPO1206','11:00']), client:'LN26-', transport:'Lalamove', pickup:'09:00', company:'Lalamove', driver:'', phone:'',
+      pickupLog:{ time:T('09:40'), note:'', photos:[] }, roadLogs:[] },
+    { taskCode:'D20260930-03', date:D, stops:S(['SANDPO1199','12:00']), client:'LN26-', transport:'Lalamove 6 ขล 5650', pickup:'10:00', company:'Lalamove', driver:'', phone:'', pickupLog:null, roadLogs:[] },
+    { taskCode:'D20260930-04', date:D, stops:S(['งานเคลมสำหรับลูกค้า System Form','13:00']), client:'', transport:'Lalamove', pickup:'11:00', company:'Lalamove', driver:'', phone:'', pickupLog:null, roadLogs:[] },
+    { taskCode:'D20260930-05', date:D, stops:S(['KWANPO1047','10:00'],['7-11 บางกร่าง 47','11:00']), client:'LN26-550', transport:'min : 4W 1.84 x 3.12 x 2 m 4ฒญ-3596', pickup:'08:00', company:P, driver:'อนุพงษ์ สรงเนย', phone:'080-0433953',
+      pickupLog:{ time:T('08:05'), note:'', photos:[] }, roadLogs:[R('08:55','รถติดเล็กน้อย'), R('09:35','ลงงานจุดแรกเรียบร้อย',1), R('10:10','ลงงานครบ',2,true)] },
+    { taskCode:'D20260930-06', date:D, stops:S(['7-11 พหลโยธิน 55/2 วงเวียนขางเขน','09:00'],['7-11 ลำลูกกา 36','10:00'],['7-11 ลำลูกกา 51','10:30']), client:'LN26-552', transport:'min : 4W 1.85 x 3.43 x 1.89 mm 2ฒผ-2186 (07.50 น ต้องปล่อยรถ)', pickup:'07:30', company:P, driver:'กิตติศักดิ์ มะลิเลย', phone:'092-8322384',
+      pickupLog:{ time:T('07:45'), note:'', photos:[] }, roadLogs:[R('09:05','ลงงานจุดแรกแล้ว',1), R('09:40','รถติดหน้าตลาด กำลังไปลำลูกกา 36')] }
+  ];
+}
+</script>
+</body>
+</html>
