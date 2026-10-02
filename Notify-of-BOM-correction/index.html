@@ -126,9 +126,23 @@
   @media (min-width: 560px) {
     .toolbar select { min-width: 160px; }
   }
+
+  /* Loading overlay */
+  #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,.92); z-index: 60;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
+  #loadingOverlay.hide { display: none; }
+  .spinner { width: 38px; height: 38px; border: 4px solid var(--blue-bg); border-top-color: var(--blue);
+    border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loadingOverlay .txt { color: var(--muted); font-size: 14px; }
 </style>
 </head>
 <body>
+
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="txt">กำลังโหลดข้อมูล…</div>
+</div>
 
 <header>
   <div class="topbar"><h1>แจ้งแก้ไข BOM</h1></div>
@@ -278,7 +292,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
-  const API_URL = "https://script.google.com/macros/s/AKfycbyl0SVGCDIBSFtR1_aJu-H9eCThos5S2Rqr3Y5eTeWYM2J9cgmYbGsJ0jr3OHdpKJDT/exec";
+  const API_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -309,29 +323,73 @@
   let rmMap = new Map();   // รหัสที่เอาไปใช้ (ตัวพิมพ์ใหญ่) -> {productName, unit}
   let initReady = false;
 
+  // ---------- แคชข้อมูล init ไว้ในเครื่อง 1 ชม. ----------
+  // เปิดเว็บซ้ำภายใน 1 ชม. จะใช้ข้อมูลเดิมที่เคยโหลดไว้ทันที ไม่ต้องรอโหลดจากเซิร์ฟเวอร์ใหม่
+  // (ถ้าออกจากเว็บ/ปิดมือถือไปแล้วเปิดใหม่ภายใน 1 ชม. ก็ยังเร็วเหมือนเดิม)
+  const INIT_CACHE_KEY = "bomInitCache_v1";
+  const INIT_CACHE_TTL = 60 * 60 * 1000; // 1 ชั่วโมง
+
+  function readInitCache() {
+    try {
+      const raw = localStorage.getItem(INIT_CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !obj.ts || Date.now() - obj.ts > INIT_CACHE_TTL) return null;
+      return obj.data;
+    } catch (e) { return null; }
+  }
+
+  function writeInitCache(d) {
+    try {
+      localStorage.setItem(INIT_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d }));
+    } catch (e) { /* โควต้าเต็มหรือเบราว์เซอร์บล็อก ไม่กระทบการใช้งาน แค่ไม่แคช */ }
+  }
+
+  function applyInitData(d) {
+    fillOptions($("reporter"), d.reporters, "— เลือกผู้แจ้ง —");
+    fillOptions($("editType"), d.editTypes, "— เลือกชนิดการแก้ไข —");
+    fillOptions($("taskStatus"), d.statuses || [], "— เลือกสถานะ —");
+    fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
+    fillOptions($("dashStatus"), d.statuses || [], "สถานะทั้งหมด");
+
+    pdMap.clear();
+    rmMap.clear();
+    d.pd.forEach(([qr, pdNumber, fgModel, fgType, itemNumber]) => {
+      pdMap.set(qr.toUpperCase(), { pdNumber, fgModel, fgType, itemNumber });
+    });
+    d.rm.forEach(([qr, productName, unit]) => {
+      rmMap.set(qr.toUpperCase(), { productName, unit });
+    });
+    initReady = true;
+  }
+
+  function hideLoadingOverlay() {
+    $("loadingOverlay").classList.add("hide");
+  }
+
   async function loadInit() {
+    // มีข้อมูลเก่าที่ยังไม่เกิน 1 ชม. -> ใช้เลย ปิด popup โหลดทันที
+    const cached = readInitCache();
+    if (cached) {
+      applyInitData(cached);
+      hideLoadingOverlay();
+      if ($("fgCode").value.trim()) resolveFG($("fgCode").value.trim());
+      if ($("rmCode").value.trim()) resolveRM($("rmCode").value.trim());
+      return;
+    }
     try {
       const d = await post({ action: "init" });
       if (!d.ok) throw new Error(d.error);
-      fillOptions($("reporter"), d.reporters, "— เลือกผู้แจ้ง —");
-      fillOptions($("editType"), d.editTypes, "— เลือกชนิดการแก้ไข —");
-      fillOptions($("taskStatus"), d.statuses || [], "— เลือกสถานะ —");
-      fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
-      fillOptions($("dashStatus"), d.statuses || [], "สถานะทั้งหมด");
-
-      d.pd.forEach(([qr, pdNumber, fgModel, fgType, itemNumber]) => {
-        pdMap.set(qr.toUpperCase(), { pdNumber, fgModel, fgType, itemNumber });
-      });
-      d.rm.forEach(([qr, productName, unit]) => {
-        rmMap.set(qr.toUpperCase(), { productName, unit });
-      });
-      initReady = true;
+      applyInitData(d);
+      writeInitCache(d);
 
       // ถ้าผู้ใช้สแกน/พิมพ์ไว้ก่อนโหลดเสร็จ ให้ค้นหาซ้ำทันทีที่พร้อม
       if ($("fgCode").value.trim()) resolveFG($("fgCode").value.trim());
       if ($("rmCode").value.trim()) resolveRM($("rmCode").value.trim());
     } catch (err) {
       setStatus($("fgStatus"), "err", "โหลดข้อมูลค้นหาไม่ได้: " + err.message + " — ยังคีย์เองได้ตามปกติ");
+    } finally {
+      hideLoadingOverlay();
     }
   }
   function fillOptions(sel, list, placeholder) {
