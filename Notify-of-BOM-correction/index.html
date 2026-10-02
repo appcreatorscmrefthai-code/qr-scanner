@@ -308,7 +308,10 @@
   const todayStr = () => new Date().toISOString().slice(0, 10);
 
   async function post(body) {
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+    // เติม query string สุ่มกันเครือข่ายมือถือ/พร็อกซีค่าย (เช่นโหมดประหยัดเน็ต) แคช URL เดิมไว้
+    // แล้วตอบ GET เก่ากลับมาแทนที่จะยิงคำสั่ง POST จริงๆ (ทำให้ได้ "BOM Change Request API" แทน JSON)
+    const url = API_URL + (API_URL.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
+    const res = await fetch(url, { method: "POST", body: JSON.stringify(body), cache: "no-store" });
     const text = await res.text();
     try { return JSON.parse(text); }
     catch (e) {
