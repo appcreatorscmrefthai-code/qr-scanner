@@ -28,8 +28,8 @@
   .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; max-width: 760px; margin: 0 auto; }
   .topbar h1 { font-size: 18px; flex: 1; }
   .tabs { display: flex; gap: 6px; max-width: 760px; margin: 0 auto; padding: 0 14px 10px; }
-  .tab { flex: 1; text-align: center; padding: 9px; border-radius: 8px; border: 1px solid var(--line);
-    background: #fff; color: var(--muted); font-weight: 600; }
+  .tab { flex: 1; text-align: center; padding: 9px 4px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--muted); font-weight: 600; font-size: 14px; }
   .tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
   main { max-width: 760px; margin: 0 auto; padding: 14px; padding-bottom: 60px; }
@@ -123,6 +123,17 @@
   .item-row .r2 { color: var(--muted); font-size: 13px; margin-top: 3px; }
   .item-row a.photo-link { color: var(--blue); font-size: 13px; }
 
+  /* นำเข้า Excel */
+  .imp-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
+  .imp-table { border-collapse: collapse; width: 100%; font-size: 12.5px; white-space: nowrap; }
+  .imp-table th, .imp-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  .imp-table th { background: var(--bg); color: var(--muted); font-weight: 700; position: sticky; top: 0; }
+  .imp-status-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .imp-status-row .label { min-width: 130px; font-size: 13px; color: var(--ink); }
+  .imp-status-row select { flex: 1; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; }
+  .imp-warn { color: var(--orange); font-size: 13px; margin-top: 6px; }
+  .imp-count { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
   @media (min-width: 560px) {
     .toolbar select { min-width: 160px; }
   }
@@ -149,6 +160,7 @@
   <div class="tabs">
     <button type="button" class="tab active" data-view="report">แจ้งงาน</button>
     <button type="button" class="tab" data-view="dashboard">Dashboard</button>
+    <button type="button" class="tab" data-view="import">นำเข้า Excel</button>
   </div>
 </header>
 
@@ -279,6 +291,60 @@
     </div>
     <div id="dashList"><div class="msg">กำลังโหลดข้อมูล…</div></div>
   </section>
+
+  <!-- ====================== นำเข้า Excel ====================== -->
+  <section id="view-import" class="view">
+    <div class="card">
+      <h2><span class="n">1</span>เลือกไฟล์ Excel</h2>
+      <div class="field">
+        <label>ไฟล์ข้อมูล (.xlsx)</label>
+        <input id="impFile" type="file" accept=".xlsx,.xls">
+      </div>
+      <div class="field">
+        <label>ชีตที่จะอ่าน</label>
+        <select id="impSheet"><option value="">— เลือกไฟล์ก่อน —</option></select>
+      </div>
+      <div id="impColWarn" class="imp-warn"></div>
+    </div>
+
+    <div class="card" id="impSettingsCard" hidden>
+      <h2><span class="n">2</span>ตั้งค่าก่อนนำเข้า</h2>
+      <div class="two-col">
+        <div class="field">
+          <label>ผู้แจ้ง <span class="req">*</span></label>
+          <select id="impReporter"><option value="">— เลือกผู้แจ้ง —</option></select>
+        </div>
+        <div class="field">
+          <label>หมายเหตุ (ใช้กับทุกแถว)</label>
+          <input id="impNote" type="text" placeholder="ไม่บังคับ">
+        </div>
+      </div>
+      <div class="imp-warn">ชนิดการแก้ไข และ วันที่นำไปใช้ จะปล่อยว่างไว้ (ไม่มีข้อมูลนี้ในไฟล์ต้นทาง) กรอกเพิ่มทีหลังในชีตได้</div>
+
+      <div id="impStatusMapBox"></div>
+    </div>
+
+    <div class="card" id="impPreviewCard" hidden>
+      <h2><span class="n">3</span>ตรวจสอบก่อนนำเข้า</h2>
+      <div class="imp-count" id="impCount"></div>
+      <div class="imp-table-wrap">
+        <table class="imp-table">
+          <thead>
+            <tr>
+              <th>#</th><th>รหัสงาน FG</th><th>เลข PD</th><th>ชื่องาน FG</th>
+              <th>รหัสที่เอาไปใช้</th><th>ชื่อวัตถุดิบ</th><th>จำนวน</th>
+              <th>รหัสเดิม</th><th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody id="impPreviewBody"></tbody>
+        </table>
+      </div>
+      <div class="imp-count" id="impPreviewNote"></div>
+
+      <div id="impMsg" class="msg" hidden style="margin-top:12px;"></div>
+      <button type="button" id="impSubmit" class="btn btn-success btn-block" style="margin-top:12px;" disabled>นำเข้าข้อมูล</button>
+    </div>
+  </section>
 </main>
 
 <!-- ====================== Scanner modal ====================== -->
@@ -290,6 +356,7 @@
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
   // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
   const API_URL = "https://script.google.com/macros/s/AKfycbyl0SVGCDIBSFtR1_aJu-H9eCThos5S2Rqr3Y5eTeWYM2J9cgmYbGsJ0jr3OHdpKJDT/exec";
@@ -329,6 +396,7 @@
   let pdMap = new Map();   // รหัสงาน FG (ตัวพิมพ์ใหญ่) -> {pdNumber, fgModel, fgType, itemNumber}
   let rmMap = new Map();   // รหัสที่เอาไปใช้ (ตัวพิมพ์ใหญ่) -> {productName, unit}
   let initReady = false;
+  let STATUS_OPTIONS_CACHE = []; // ค่าตัวเลือกสถานะของงาน ใช้ในหน้านำเข้า Excel ด้วย
 
   // ---------- แคชข้อมูล init ไว้ในเครื่อง 1 ชม. ----------
   // เปิดเว็บซ้ำภายใน 1 ชม. จะใช้ข้อมูลเดิมที่เคยโหลดไว้ทันที ไม่ต้องรอโหลดจากเซิร์ฟเวอร์ใหม่
@@ -358,6 +426,9 @@
     fillOptions($("taskStatus"), d.statuses || [], "— เลือกสถานะ —");
     fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
     fillOptions($("dashStatus"), d.statuses || [], "สถานะทั้งหมด");
+    fillOptions($("impReporter"), d.reporters, "— เลือกผู้แจ้ง —");
+    if (d.reporters.includes("PN")) $("impReporter").value = "PN"; // ค่าเริ่มต้นสำหรับนำเข้า Excel
+    STATUS_OPTIONS_CACHE = d.statuses || [];
 
     pdMap.clear();
     rmMap.clear();
@@ -741,6 +812,209 @@
   $("dashSearch").addEventListener("input", renderDashboard);
   $("dashReporter").addEventListener("change", renderDashboard);
   $("dashStatus").addEventListener("change", renderDashboard);
+
+  // ---------- นำเข้า Excel ----------
+  // อ่านไฟล์ .xlsx ในเครื่อง (ไม่ต้องอัปโหลดไปไหน) ด้วยไลบรารี SheetJS แล้วแมปคอลัมน์
+  // เป็นชื่อหัวคอลัมน์หลายแบบ เผื่อไฟล์ต้นทางเปลี่ยนชื่อ/จัดลำดับใหม่
+  let impWorkbook = null;
+  let impRows = []; // แถวที่ parse แล้ว ยังไม่รวมค่าที่ตั้งร่วมกัน (ผู้แจ้ง/ชนิดการแก้ไข/วันที่/สถานะที่แมป)
+  let impStatusMap = {}; // ค่าสถานะจากไฟล์ -> สถานะของงานในระบบ
+
+  const IMP_COL_ALIASES = {
+    pdNumber: ["pdnum", "pd number", "เลข pd"],
+    fgCode: ["fgcod", "fgcode", "รหัสงาน fg"],
+    fgModel: ["fgmodel", "ชื่องาน fg"],
+    rmCode: ["rmcode", "รหัสที่เอาไปใช้"],
+    rmName: ["rmname", "ชื่อวัตถุดิบ"],
+    qty: ["rmqty", "จำนวนที่ใช้"],
+    oldCode: ["แก้ไขbom-pd", "รหัสเดิม", "รหัสเดิม (ถ้าทราบ)"],
+    status: ["สถานะ", "status", "สถานะของงาน"],
+  };
+
+  function normHeader(h) { return String(h ?? "").trim().toLowerCase(); }
+
+  function findImpCol(headers, aliases) {
+    const normed = headers.map(normHeader);
+    for (const a of aliases) {
+      const idx = normed.indexOf(normHeader(a));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  $("impFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    $("impSettingsCard").hidden = true;
+    $("impPreviewCard").hidden = true;
+    $("impMsg").hidden = true;
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      impWorkbook = XLSX.read(buf, { type: "array", cellDates: true });
+      fillImpSheetSelect();
+    } catch (err) {
+      alert("อ่านไฟล์ Excel ไม่สำเร็จ: " + err.message);
+    }
+  });
+
+  function fillImpSheetSelect() {
+    const wb = impWorkbook;
+    if (!wb) return;
+    const preferred = wb.SheetNames.includes("BOM PD") ? "BOM PD" : wb.SheetNames[0];
+    $("impSheet").innerHTML = wb.SheetNames.map((n) =>
+      `<option value="${esc(n)}" ${n === preferred ? "selected" : ""}>${esc(n)}</option>`).join("");
+    parseImpSheet();
+  }
+
+  $("impSheet").addEventListener("change", parseImpSheet);
+
+  function parseImpSheet() {
+    const wb = impWorkbook;
+    if (!wb) return;
+    const sheetName = $("impSheet").value;
+    const ws = wb.Sheets[sheetName];
+    if (!ws) { impRows = []; return; }
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
+
+    if (!rows.length) {
+      impRows = [];
+      $("impColWarn").textContent = "ชีตนี้ไม่มีข้อมูล";
+      $("impSettingsCard").hidden = true;
+      $("impPreviewCard").hidden = true;
+      return;
+    }
+
+    const headers = rows[0];
+    const col = {};
+    Object.keys(IMP_COL_ALIASES).forEach((k) => { col[k] = findImpCol(headers, IMP_COL_ALIASES[k]); });
+
+    impRows = rows.slice(1)
+      .filter((r) => r.some((v) => String(v ?? "").trim() !== ""))
+      .map((r) => ({
+        pdNumber: col.pdNumber >= 0 ? String(r[col.pdNumber] ?? "").trim() : "",
+        fgCode: col.fgCode >= 0 ? String(r[col.fgCode] ?? "").trim() : "",
+        fgModel: col.fgModel >= 0 ? String(r[col.fgModel] ?? "").trim() : "",
+        rmCode: col.rmCode >= 0 ? String(r[col.rmCode] ?? "").trim() : "",
+        rmName: col.rmName >= 0 ? String(r[col.rmName] ?? "").trim() : "",
+        qty: col.qty >= 0 ? Math.abs(Number(r[col.qty]) || 0) : 0,
+        oldCode: col.oldCode >= 0 ? String(r[col.oldCode] ?? "").trim() : "",
+        statusRaw: col.status >= 0 ? String(r[col.status] ?? "").trim() : "",
+      }));
+
+    const missing = Object.keys(col).filter((k) => col[k] < 0);
+    $("impColWarn").textContent = missing.length
+      ? "ไม่พบคอลัมน์: " + missing.join(", ") + " ในชีตนี้ — ช่องที่เกี่ยวข้องจะว่างไว้ ต้องกรอกเพิ่มทีหลังในชีต"
+      : "";
+
+    $("impSettingsCard").hidden = !impRows.length;
+    $("impPreviewCard").hidden = !impRows.length;
+
+    buildImpStatusMap();
+    renderImpPreview();
+  }
+
+  function guessStatus(raw) {
+    const low = raw.toLowerCase();
+    if (low.includes("start") || low.includes("ดำเนินการ")) return "อยู่ระหว่างดำเนินการ";
+    if (low.includes("schedul") || low.includes("แจ้ง")) return "แจ้งแก้ไข";
+    if (low.includes("done") || low.includes("complete") || low.includes("แก้ไขแล้ว")) return "แก้ไขแล้ว";
+    return STATUS_OPTIONS_CACHE.includes(raw) ? raw : "";
+  }
+
+  function buildImpStatusMap() {
+    const distinct = Array.from(new Set(impRows.map((r) => r.statusRaw).filter(Boolean)));
+    distinct.forEach((s) => { if (!(s in impStatusMap)) impStatusMap[s] = guessStatus(s); });
+    Object.keys(impStatusMap).forEach((k) => { if (!distinct.includes(k)) delete impStatusMap[k]; });
+
+    const box = $("impStatusMapBox");
+    if (!distinct.length) { box.innerHTML = ""; return; }
+    box.innerHTML = `<div class="field"><label>จับคู่ค่าสถานะจากไฟล์ กับ สถานะของงานในระบบ</label></div>` +
+      distinct.map((s) => `
+        <div class="imp-status-row">
+          <div class="label">${esc(s)}</div>
+          <select data-status-src="${esc(s)}" class="impStatusSel">
+            <option value="">— ไม่ตั้งสถานะ —</option>
+            ${STATUS_OPTIONS_CACHE.map((o) =>
+              `<option value="${esc(o)}" ${impStatusMap[s] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+          </select>
+        </div>`).join("");
+    document.querySelectorAll(".impStatusSel").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        impStatusMap[sel.dataset.statusSrc] = sel.value;
+        renderImpPreview();
+      });
+    });
+  }
+
+  function renderImpPreview() {
+    const reporter = $("impReporter").value;
+
+    $("impCount").textContent = `พบ ${impRows.length} แถวในไฟล์`;
+
+    const body = impRows.slice(0, 50).map((r, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.fgCode)}</td>
+        <td>${esc(r.pdNumber)}</td>
+        <td>${esc(r.fgModel)}</td>
+        <td>${esc(r.rmCode)}</td>
+        <td>${esc(r.rmName)}</td>
+        <td>${esc(r.qty)}</td>
+        <td>${esc(r.oldCode)}</td>
+        <td>${esc(impStatusMap[r.statusRaw] || r.statusRaw || "—")}</td>
+      </tr>`).join("");
+    $("impPreviewBody").innerHTML = body || `<tr><td colspan="9">ไม่มีข้อมูล</td></tr>`;
+    $("impPreviewNote").textContent = impRows.length > 50
+      ? `แสดงตัวอย่าง 50 จากทั้งหมด ${impRows.length} แถว (นำเข้าจะส่งครบทุกแถว)` : "";
+
+    const ready = impRows.length > 0 && reporter;
+    $("impSubmit").disabled = !ready;
+  }
+
+  ["impReporter", "impNote"].forEach((id) => {
+    $(id).addEventListener("input", renderImpPreview);
+    $(id).addEventListener("change", renderImpPreview);
+  });
+
+  $("impSubmit").addEventListener("click", async () => {
+    const reporter = $("impReporter").value;
+    const note = $("impNote").value.trim();
+    if (!reporter) return;
+
+    const rows = impRows
+      .filter((r) => (r.fgCode || r.pdNumber || r.fgModel) && (r.rmCode || r.rmName) && r.qty > 0)
+      .map((r) => ({
+        reporter, status: impStatusMap[r.statusRaw] || "",
+        fgCode: r.fgCode, pdNumber: r.pdNumber, fgModel: r.fgModel,
+        rmCode: r.rmCode, productName: r.rmName, qty: r.qty,
+        oldCode: r.oldCode, editType: "", useDate: "", note,
+      }));
+    const skippedUpfront = impRows.length - rows.length;
+
+    if (!rows.length) {
+      $("impMsg").className = "msg err";
+      $("impMsg").textContent = "ไม่มีแถวที่ข้อมูลครบพอจะนำเข้า (ต้องมีรหัสงาน/เลข PD/ชื่องาน FG อย่างน้อย 1 อย่าง, รหัสวัตถุดิบหรือชื่อวัตถุดิบ, และจำนวนมากกว่า 0)";
+      $("impMsg").hidden = false;
+      return;
+    }
+
+    const btn = $("impSubmit");
+    btn.disabled = true; btn.textContent = "กำลังนำเข้า…";
+    $("impMsg").hidden = true;
+    try {
+      const d = await post({ action: "bulkImport", rows });
+      if (!d.ok) throw new Error(d.error || "นำเข้าไม่สำเร็จ");
+      $("impMsg").className = "msg ok";
+      $("impMsg").textContent = `นำเข้าสำเร็จ ${d.imported} แถว`
+        + (d.skipped ? ` (เซิร์ฟเวอร์ข้าม ${d.skipped} แถวที่ข้อมูลไม่ครบ)` : "")
+        + (skippedUpfront ? ` (ไม่ได้ส่ง ${skippedUpfront} แถวตั้งแต่ต้นเพราะข้อมูลไม่ครบ)` : "");
+      $("impMsg").hidden = false;
+      dashLoaded = false; // ให้ Dashboard โหลดข้อมูลใหม่รอบหน้าที่เปิดแท็บ
+    } catch (err) {
+      $("impMsg").className = "msg err"; $("impMsg").textContent = err.message; $("impMsg").hidden = false;
+    }
+    btn.disabled = false; btn.textContent = "นำเข้าข้อมูล";
+  });
 
   // ---------- Scanner (ใช้ร่วมกันทุกช่อง) ----------
   let scanner = null, scanTarget = null;
