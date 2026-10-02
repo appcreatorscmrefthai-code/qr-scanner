@@ -69,6 +69,7 @@
   .btn-primary { background: var(--blue); color: #fff; }
   .btn-success { background: var(--green); color: #fff; }
   .btn-ghost { background: #fff; color: var(--blue); border-color: var(--line); }
+  .btn-done { background: #9aa3ad; color: #fff; }
   .btn-block { width: 100%; }
   button.btn:disabled { opacity: .55; cursor: default; }
 
@@ -839,11 +840,22 @@
     return -1;
   }
 
+  let impImported = false; // กันกดนำเข้าซ้ำหลังนำเข้าไฟล์เดิมสำเร็จแล้ว
+
+  function resetImpSubmitButton() {
+    impImported = false;
+    const btn = $("impSubmit");
+    btn.classList.remove("btn-done");
+    btn.classList.add("btn-success");
+    btn.textContent = "นำเข้าข้อมูล";
+  }
+
   $("impFile").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     $("impSettingsCard").hidden = true;
     $("impPreviewCard").hidden = true;
     $("impMsg").hidden = true;
+    resetImpSubmitButton();
     if (!file) return;
     try {
       const buf = await file.arrayBuffer();
@@ -905,6 +917,7 @@
 
     $("impSettingsCard").hidden = !impRows.length;
     $("impPreviewCard").hidden = !impRows.length;
+    resetImpSubmitButton();
 
     renderImpPreview();
   }
@@ -932,7 +945,7 @@
     $("impPreviewNote").textContent = impRows.length > 50
       ? `แสดงตัวอย่าง 50 จากทั้งหมด ${impRows.length} แถว (นำเข้าจะส่งครบทุกแถว)` : "";
 
-    const ready = impRows.length > 0 && reporter;
+    const ready = impRows.length > 0 && reporter && !impImported;
     $("impSubmit").disabled = !ready;
   }
 
@@ -971,10 +984,18 @@
       if (!d.ok) throw new Error(d.error || "นำเข้าไม่สำเร็จ");
       $("impMsg").className = "msg ok";
       $("impMsg").textContent = `นำเข้าสำเร็จ ${d.imported} แถว`
+        + (d.duplicate ? ` (ข้าม ${d.duplicate} แถวที่ซ้ำกับข้อมูลเดิมในชีต)` : "")
         + (d.skipped ? ` (เซิร์ฟเวอร์ข้าม ${d.skipped} แถวที่ข้อมูลไม่ครบ)` : "")
         + (skippedUpfront ? ` (ไม่ได้ส่ง ${skippedUpfront} แถวตั้งแต่ต้นเพราะข้อมูลไม่ครบ)` : "");
       $("impMsg").hidden = false;
       dashLoaded = false; // ให้ Dashboard โหลดข้อมูลใหม่รอบหน้าที่เปิดแท็บ
+      // นำเข้าสำเร็จแล้ว ล็อกปุ่มไว้กันกดซ้ำ จนกว่าจะเลือกไฟล์/ชีตใหม่
+      impImported = true;
+      btn.disabled = true;
+      btn.classList.remove("btn-success");
+      btn.classList.add("btn-done");
+      btn.textContent = "นำเข้าแล้ว — เลือกไฟล์ใหม่เพื่อนำเข้าอีกครั้ง";
+      return;
     } catch (err) {
       $("impMsg").className = "msg err"; $("impMsg").textContent = err.message; $("impMsg").hidden = false;
     }
