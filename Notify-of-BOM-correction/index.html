@@ -311,7 +311,11 @@
     const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
     const text = await res.text();
     try { return JSON.parse(text); }
-    catch (e) { throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (HTTP " + res.status + ")"); }
+    catch (e) {
+      // แสดงตัวอย่างข้อความที่เซิร์ฟเวอร์ตอบกลับจริงๆ ด้วย เพื่อช่วยวินิจฉัยว่าทำไมไม่ใช่ JSON
+      const snippet = text.replace(/\s+/g, " ").trim().slice(0, 200);
+      throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (HTTP " + res.status + "): " + (snippet || "(ว่างเปล่า)"));
+    }
   }
 
   // ---------- Tabs ----------
