@@ -319,9 +319,7 @@
           <input id="impNote" type="text" placeholder="ไม่บังคับ">
         </div>
       </div>
-      <div class="imp-warn">ชนิดการแก้ไข และ วันที่นำไปใช้ จะปล่อยว่างไว้ (ไม่มีข้อมูลนี้ในไฟล์ต้นทาง) กรอกเพิ่มทีหลังในชีตได้</div>
-
-      <div id="impStatusMapBox"></div>
+      <div class="imp-warn">ชนิดการแก้ไข และ วันที่นำไปใช้ จะปล่อยว่างไว้ (ไม่มีข้อมูลนี้ในไฟล์ต้นทาง) กรอกเพิ่มทีหลังในชีตได้<br>สถานะของงานของทุกแถวที่นำเข้า จะตั้งเป็น "แจ้งแก้ไข" ให้อัตโนมัติ</div>
     </div>
 
     <div class="card" id="impPreviewCard" hidden>
@@ -817,8 +815,7 @@
   // อ่านไฟล์ .xlsx ในเครื่อง (ไม่ต้องอัปโหลดไปไหน) ด้วยไลบรารี SheetJS แล้วแมปคอลัมน์
   // เป็นชื่อหัวคอลัมน์หลายแบบ เผื่อไฟล์ต้นทางเปลี่ยนชื่อ/จัดลำดับใหม่
   let impWorkbook = null;
-  let impRows = []; // แถวที่ parse แล้ว ยังไม่รวมค่าที่ตั้งร่วมกัน (ผู้แจ้ง/ชนิดการแก้ไข/วันที่/สถานะที่แมป)
-  let impStatusMap = {}; // ค่าสถานะจากไฟล์ -> สถานะของงานในระบบ
+  let impRows = []; // แถวที่ parse แล้ว ยังไม่รวมค่าที่ตั้งร่วมกัน (ผู้แจ้ง/หมายเหตุ)
 
   const IMP_COL_ALIASES = {
     pdNumber: ["pdnum", "pd number", "เลข pd"],
@@ -909,42 +906,10 @@
     $("impSettingsCard").hidden = !impRows.length;
     $("impPreviewCard").hidden = !impRows.length;
 
-    buildImpStatusMap();
     renderImpPreview();
   }
 
-  function guessStatus(raw) {
-    const low = raw.toLowerCase();
-    if (low.includes("start") || low.includes("ดำเนินการ")) return "อยู่ระหว่างดำเนินการ";
-    if (low.includes("schedul") || low.includes("แจ้ง")) return "แจ้งแก้ไข";
-    if (low.includes("done") || low.includes("complete") || low.includes("แก้ไขแล้ว")) return "แก้ไขแล้ว";
-    return STATUS_OPTIONS_CACHE.includes(raw) ? raw : "";
-  }
-
-  function buildImpStatusMap() {
-    const distinct = Array.from(new Set(impRows.map((r) => r.statusRaw).filter(Boolean)));
-    distinct.forEach((s) => { if (!(s in impStatusMap)) impStatusMap[s] = guessStatus(s); });
-    Object.keys(impStatusMap).forEach((k) => { if (!distinct.includes(k)) delete impStatusMap[k]; });
-
-    const box = $("impStatusMapBox");
-    if (!distinct.length) { box.innerHTML = ""; return; }
-    box.innerHTML = `<div class="field"><label>จับคู่ค่าสถานะจากไฟล์ กับ สถานะของงานในระบบ</label></div>` +
-      distinct.map((s) => `
-        <div class="imp-status-row">
-          <div class="label">${esc(s)}</div>
-          <select data-status-src="${esc(s)}" class="impStatusSel">
-            <option value="">— ไม่ตั้งสถานะ —</option>
-            ${STATUS_OPTIONS_CACHE.map((o) =>
-              `<option value="${esc(o)}" ${impStatusMap[s] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
-          </select>
-        </div>`).join("");
-    document.querySelectorAll(".impStatusSel").forEach((sel) => {
-      sel.addEventListener("change", () => {
-        impStatusMap[sel.dataset.statusSrc] = sel.value;
-        renderImpPreview();
-      });
-    });
-  }
+  const IMP_FIXED_STATUS = "แจ้งแก้ไข"; // สถานะของงานของทุกแถวที่นำเข้าจาก Excel ตั้งค่าคงที่ไว้แบบนี้เสมอ
 
   function renderImpPreview() {
     const reporter = $("impReporter").value;
@@ -961,7 +926,7 @@
         <td>${esc(r.rmName)}</td>
         <td>${esc(r.qty)}</td>
         <td>${esc(r.oldCode)}</td>
-        <td>${esc(impStatusMap[r.statusRaw] || r.statusRaw || "—")}</td>
+        <td>${esc(IMP_FIXED_STATUS)}</td>
       </tr>`).join("");
     $("impPreviewBody").innerHTML = body || `<tr><td colspan="9">ไม่มีข้อมูล</td></tr>`;
     $("impPreviewNote").textContent = impRows.length > 50
@@ -984,7 +949,7 @@
     const rows = impRows
       .filter((r) => (r.fgCode || r.pdNumber || r.fgModel) && (r.rmCode || r.rmName) && r.qty > 0)
       .map((r) => ({
-        reporter, status: impStatusMap[r.statusRaw] || "",
+        reporter, status: IMP_FIXED_STATUS,
         fgCode: r.fgCode, pdNumber: r.pdNumber, fgModel: r.fgModel,
         rmCode: r.rmCode, productName: r.rmName, qty: r.qty,
         oldCode: r.oldCode, editType: "", useDate: "", note,
