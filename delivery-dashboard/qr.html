@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR ประจำงาน</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font:15px/1.45 "Sarabun","Noto Sans Thai",Tahoma,sans-serif;background:#eef1f6;color:#111827}
+.bar{padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.bar button,.bar a{font:inherit;padding:8px 18px;border-radius:10px;border:0;background:#1d4ed8;color:#fff;font-weight:600;cursor:pointer;text-decoration:none}
+.bar a{background:#374151}
+.bar input{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid #9ca3af}
+#info{text-align:center;color:#4b5563;padding:0 16px 10px}
+.sheet{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;max-width:1100px;margin:0 auto;padding:0 16px 30px}
+.card{background:#fff;border:2px solid #111827;border-radius:14px;padding:14px;break-inside:avoid;page-break-inside:avoid}
+.card h2{margin:0;font-size:22px;font-variant-numeric:tabular-nums}
+.card .meta{color:#374151;font-size:13px;margin:2px 0 8px;overflow-wrap:anywhere}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center}
+.pair b{display:block;font-size:12.5px;margin-bottom:4px}
+.pair .who{font-size:12px;color:#4b5563}
+.qr{display:inline-block;padding:6px;background:#fff}
+.qr img,.qr canvas{display:block;margin:0 auto}
+@media print{body{background:#fff}.bar,#info{display:none}.sheet{grid-template-columns:1fr 1fr;gap:10px;padding:0}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <label>วันที่ <input type="date" id="date"></label>
+  <button onclick="window.print()">พิมพ์ QR</button>
+  <a href="dashboard.html" id="back">กลับ Dashboard</a>
+</div>
+<div id="info"></div>
+<div class="sheet" id="sheet"></div>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+// QR ประจำงาน: 1 งานมี 2 ใบ สแกนด้วยกล้องมือถือแล้วเข้าหน้าของงานนั้นทันที ไม่ต้องสแกนซ้ำในหน้าเว็บ
+const CFG = window.APP_CONFIG || {};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const base = location.href.replace(/[^/]*([?#].*)?$/, '');
+const today = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+let date = new URLSearchParams(location.search).get('date') || today();
+
+async function load() {
+  $('date').value = date; $('back').href = 'dashboard.html?date=' + date;
+  $('info').textContent = 'กำลังโหลด…'; $('sheet').innerHTML = '';
+  let tasks;
+  try {
+    if (!CFG.API_URL) tasks = ['D20261003-01', 'D20261003-02'].map(c => ({ taskCode: c, pickup: '07:30', plate: '3 ฒผ 2186', driver: '(โหมดตัวอย่าง)', stops: [{ name: 'จุดส่งตัวอย่าง' }] }));
+    else { const d = await Auth.getJson({ action: 'plan', date }); if (!d.ok) throw new Error(d.error); tasks = d.tasks; }
+  } catch (e) { $('info').textContent = 'โหลดข้อมูลไม่สำเร็จ: ' + e.message; return; }
+  tasks.sort((a, b) => a.taskCode.localeCompare(b.taskCode));
+  $('info').textContent = tasks.length ? `${tasks.length} งาน · แต่ละงานมี QR 2 ใบ (อัปโหลดรูปส่งงาน / ผู้จัดส่ง)` : 'ไม่มีแผนจัดส่งของวันที่เลือก';
+  if (!window.QRCode) { $('info').textContent = 'โหลดตัวสร้าง QR ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต'; return; }
+  tasks.forEach((t, i) => {
+    const card = document.createElement('div'); card.className = 'card';
+    card.innerHTML = `<h2>${esc(t.taskCode)}</h2>
+      <div class="meta">${esc([t.pickup ? 'ตารางเวลา ' + t.pickup : '', t.plate, t.driver].filter(Boolean).join(' · '))}<br>${esc((t.stops || []).map((s, k) => `${k + 1}. ${s.name}`).join(' / '))}</div>
+      <div class="pair">
+        <div><b>อัปโหลดรูปส่งงาน</b><div class="qr" id="a${i}"></div><div class="who">ก่อนรถออกจากต้นทาง</div></div>
+        <div><b>ผู้จัดส่ง (คนขับ/คนติดตาม)</b><div class="qr" id="b${i}"></div><div class="who">เช็คอิน · บนถนน · ส่งงาน</div></div>
+      </div>`;
+    $('sheet').appendChild(card);
+    const q = encodeURIComponent(t.taskCode);
+    [['a', 'pickup.html'], ['b', 'road.html']].forEach(([k, f]) =>
+      new QRCode($(k + i), { text: `${base}${f}?task=${q}`, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }));
+  });
+}
+$('date').onchange = e => { date = e.target.value || today(); load(); };
+load();
+</script>
+</body>
+</html>
