@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>อัปเดตข้อมูลสำหรับผู้จัดส่ง</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>อัปเดตข้อมูลสำหรับผู้จัดส่ง</h1>
+  <p class="sub">(คนขับ / คนติดตาม) ทำทีละขั้น: เช็คอิน, สถานการณ์บนถนน, ส่งงาน</p>
+  <div id="demo" class="msg info" hidden>โหมดตัวอย่าง: ยังไม่ได้ใส่ API_URL ใน config.js ข้อมูลจะไม่ถูกบันทึก</div>
+  <div id="msg" class="msg err" hidden role="alert"></div>
+
+  <div class="card" id="scanCard" hidden>
+    <h2>สแกน QR ประจำงาน</h2>
+    <div id="reader" hidden></div>
+    <button class="btn primary" id="scanBtn" type="button">เปิดกล้องสแกน QR</button>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card" id="taskBox"></div>
+
+    <div class="card" id="s1">
+      <h2>1. เช็คอินเมื่อรถมาถึง SCM</h2>
+      <div id="s1done" class="okline" hidden></div>
+      <div id="s1form">
+        <label class="lbl" for="plate">ยืนยันเลขทะเบียนรถ</label>
+        <div class="inline">
+          <input id="plate" class="inp" type="text" inputmode="text" autocomplete="off" maxlength="12" readonly>
+          <button class="btn ghost small" id="plateEdit" type="button">แก้ไข</button>
+        </div>
+        <div class="meter" id="plateHint">ถ้าทะเบียนไม่ตรงกับรถที่มา กด "แก้ไข" แล้วพิมพ์ตามรูปแบบ เช่น 3 ฒผ 2186</div>
+        <button class="btn primary act" id="checkinBtn" type="button" style="margin-top:12px">บันทึก / เช็คอิน</button>
+      </div>
+    </div>
+
+    <div class="card" id="s2">
+      <h2>2. สถานการณ์บนถนน <small>ส่งได้ตลอดจนกว่ารถถึงหน้างาน</small></h2>
+      <div id="s2lock" class="lock" hidden></div>
+      <div id="s2body">
+        <div class="lbl">รูปสถานการณ์บนถนน <small>สูงสุด 5 รูป รวมไม่เกิน 5 MB</small></div>
+        <div id="pkRoad"></div>
+        <div class="lbl" style="margin-top:14px">เวลาที่คาดว่าจะถึงแต่ละจุด</div>
+        <div id="etaBox"></div>
+        <label class="lbl" for="noteRoad" style="margin-top:14px">หมายเหตุ</label>
+        <textarea id="noteRoad" maxlength="2000" placeholder="เช่น รถติด ฝนตก"></textarea>
+        <button class="btn primary act" id="roadBtn" type="button" style="margin-top:12px">ส่งอัปเดตสถานการณ์</button>
+      </div>
+    </div>
+
+    <div class="card" id="s3">
+      <h2>3. ส่งงาน / จบงาน</h2>
+      <div id="s3lock" class="lock" hidden></div>
+      <div id="s3arrive" hidden>
+        <div class="meter" id="arriveText"></div>
+        <button class="btn finish act" id="arriveBtn" type="button" style="margin-top:10px"></button>
+      </div>
+      <div id="s3unload" hidden>
+        <div id="arrivedLine" class="okline"></div>
+        <div class="lbl" style="margin-top:12px">รูปลงงาน <small>สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></div>
+        <div id="pkUnload"></div>
+        <label class="lbl" for="noteUnload" style="margin-top:14px">หมายเหตุ</label>
+        <textarea id="noteUnload" maxlength="2000" placeholder="ถ้ามี"></textarea>
+        <button class="btn finish act" id="unloadBtn" type="button" style="margin-top:12px"></button>
+      </div>
+    </div>
+
+    <div class="card stamp"><span>วันที่และเวลา (บันทึกอัตโนมัติ)</span><b id="stamp"></b></div>
+    <div id="sync" class="meter" hidden style="text-align:center;margin:6px 0"></div>
+    <div id="prog" hidden><div id="progText" class="meter"></div><div class="bar"><i id="progBar"></i></div></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden role="status"></div>
+<dialog id="cfDlg">
+  <p id="cfText"></p>
+  <div class="btns"><button class="btn finish" id="cfYes" type="button">ยืนยัน</button><button class="btn ghost" id="cfNo" type="button">ยกเลิก</button></div>
+</dialog>
+
+<script src="config.js"></script>
+<script src="form.js"></script>
+<script src="driver.js"></script>
+</body>
+</html>
