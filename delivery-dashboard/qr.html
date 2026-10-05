@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>ฟอร์ม QR ประจำงาน</title>
+<style>
+/* รูปแบบตามไฟล์ QR_Forms_Sample_2.docx : ฟอนต์ Tahoma ขอบกระดาษ 10 มม.
+   รายงานคนขับ    : 1 งาน = 1 หน้า A4 ตัดได้ 4 ชิ้น (ส่วนหัว + จุดส่ง 3 ช่อง)
+   รายงานคลังสินค้า : 3 งาน = 1 หน้า A4 ตัดได้ 3 ชิ้น
+   ขอบ @page = 0 เพื่อไม่ให้เบราว์เซอร์พิมพ์ชื่อหน้า/ที่อยู่เว็บ แล้วพิมพ์เฉพาะวันที่ (บนซ้าย) กับเลขหน้า (ล่างขวา) เอง */
+@page{size:A4 portrait;margin:0}
+*{box-sizing:border-box}
+body{margin:0;font:11pt/1.5 Tahoma,"Leelawadee UI","Noto Sans Thai",sans-serif;background:#e5e7eb;color:#000}
+.bar{padding:12px 16px;display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;justify-content:center;position:sticky;top:0;background:#e5e7eb;z-index:2}
+.bar button,.bar a{font:inherit;padding:8px 18px;border-radius:10px;border:0;background:#1d4ed8;color:#fff;font-weight:700;cursor:pointer;text-decoration:none}
+.bar button:disabled{opacity:.45;cursor:not-allowed}
+.bar a{background:#374151}
+.datebox{background:#fff;border:1px solid #9ca3af;border-radius:8px;padding:7px 12px;font-weight:700}
+.kind{display:flex;border:1px solid #9ca3af;border-radius:10px;overflow:hidden;background:#fff}
+.kind label{padding:7px 14px;cursor:pointer;font-weight:700;border-right:1px solid #d1d5db}
+.kind label:last-child{border-right:0}
+.kind input{position:absolute;opacity:0;pointer-events:none}
+.kind label:has(input:checked){background:#111827;color:#fff}
+.kind label:has(input:focus-visible){outline:2px solid #1d4ed8;outline-offset:-2px}
+#info{text-align:center;color:#374151;padding:0 16px 12px}
+#pages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:0 8px 30px}
+.page{position:relative;width:210mm;height:297mm;padding:10mm;background:#fff;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.2);overflow:hidden}
+.pg-date,.pg-no{position:absolute;font-size:8pt;line-height:1;color:#000;font-variant-numeric:tabular-nums}
+.pg-date{left:10mm;top:4.5mm}
+.pg-no{right:10mm;bottom:4.5mm}
+.piece{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.piece + .piece{border-top:1px dashed #000}          /* เส้นประ = แนวตัด */
+u{text-underline-offset:1.5pt}
+
+/* ---- ส่วนหัว (ใช้ทั้งสองรายงาน) ---- */
+.head{display:grid;grid-template-columns:1fr auto;column-gap:6mm;align-items:start;border-bottom:1.5pt solid #000;padding-bottom:1.5mm}
+.role{font-size:18pt;font-weight:700;line-height:1.3}
+.role small{display:block;font-size:10pt;font-weight:400;color:#374151;line-height:1.5;max-width:92mm}
+.ref{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ref b{display:block;font-size:18pt;line-height:1.3}
+.ref strong{display:block;font-size:14pt;line-height:1.35}
+.ref span{display:block;font-size:12pt;color:#374151;line-height:1.35}
+.big{font-size:14pt;font-weight:700;line-height:1.45;margin-top:2mm;overflow-wrap:anywhere}
+.lbl{font-size:11pt;font-weight:700}
+.txt{font-size:11pt;overflow-wrap:anywhere}
+.qr img,.qr canvas{width:var(--q);height:var(--q);display:block}
+
+/* ---- รายงานคนขับ : 4 ชิ้น ---- */
+.drv-main{flex:1 1 0;padding:0 0 3mm;--q:24.3mm}
+.drv-main .cols{display:grid;grid-template-columns:1fr 1fr;column-gap:4mm;margin-top:1mm;align-items:start}
+.drv-main .stop + .stop{margin-top:3.5mm}                     /* เว้นบรรทัดระหว่างจุดส่ง */
+.drv-main .qrrow{display:flex;gap:4mm;align-items:flex-start}
+.help b{display:block;font-size:11pt}
+.help div{font-size:10.5pt}
+.drv-stop{flex:0 0 auto;min-height:60mm;display:grid;grid-template-columns:1fr auto;column-gap:6mm;align-content:start;padding:10mm 0}   /* เว้นระยะจากแนวตัด 1 ซม. ทั้งบนและล่าง */
+.drv-stop .name{grid-column:1 / -1;font-size:10.5pt;padding-left:12.7mm;margin-bottom:1.5mm;overflow-wrap:anywhere}
+table.docs{border-collapse:collapse;width:96mm;margin-left:15.9mm;font-size:8pt;line-height:1.2}
+table.docs th,table.docs td{border:1px solid #000;padding:0 1.5mm;height:4.6mm}
+table.docs th{font-weight:700;text-align:center}
+table.docs td.c{width:22mm;text-align:center;font-size:10pt;line-height:1}
+.tag{align-self:center;text-align:right;font-size:10pt;color:#374151;line-height:1.5;font-variant-numeric:tabular-nums}
+.tag b{display:block;font-size:14pt;color:#000}
+.tag i{display:inline-block;font-style:normal;font-weight:700;font-size:12pt;color:#000;border:1.5pt solid #000;padding:0 3mm;margin-top:1mm}
+
+/* ---- รายงานคลังสินค้า : 3 ชิ้น ---- */
+.wh{flex:1 1 0;--q:29.9mm}
+.wh + .wh{padding-top:4mm}
+.wh .cols{display:grid;grid-template-columns:1fr auto;column-gap:6mm;align-items:start;margin-top:1mm}
+.wh .qr{margin:1mm 8mm 0 0}
+
+@media screen and (max-width:760px){#pages{zoom:.48}}
+@media print{
+  body{background:#fff}
+  .bar,#info{display:none}
+  #pages{display:block;padding:0}
+  .page{box-shadow:none;break-after:page;page-break-after:always}
+  .page:last-child{break-after:auto;page-break-after:auto}
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span>วันที่</span><input type="date" id="date" class="datebox" aria-label="เลือกวันที่">
+  <div class="kind" role="radiogroup" aria-label="ชนิดฟอร์ม">
+    <label><input type="radio" name="kind" value="driver" checked>รายงานคนขับ</label>
+    <label><input type="radio" name="kind" value="wh">รายงานคลังสินค้า</label>
+    <label><input type="radio" name="kind" value="both">ทั้ง 2 รายงาน</label>
+  </div>
+  <button id="printBtn" disabled>พิมพ์</button>
+  <a href="dashboard.html" id="back">กลับ Dashboard</a>
+</div>
+<div id="info"></div>
+<div id="pages"></div>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+// QR ประจำงาน: สแกนแล้วเข้าหน้าของงานนั้นทันที  1 งานมี 2 รายงาน (คนขับ / คลังสินค้า) เลือกชนิดก่อนพิมพ์
+const CFG = window.APP_CONFIG || {};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const base = location.href.replace(/[^/]*([?#].*)?$/, '');
+const today = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+const ORIGIN = CFG.ORIGIN || 'SCM';
+const DOCS = Array.isArray(CFG.QR_DOCS) && CFG.QR_DOCS.length ? CFG.QR_DOCS : ['PACKING SLIP / DELIVERY ORDER', 'TAX INVOICE ________________', 'BILLING NOTE', 'RECEIPT', 'PO. CUSTOMER', 'ใบส่งสินค้าชั่วคราว'];
+const join = a => a.filter(Boolean).map(esc).join(' | ');
+let date = new URLSearchParams(location.search).get('date') || today(), tasks = [], seq = 0, pending = [];
+const kind = () => document.querySelector('input[name=kind]:checked').value;
+
+// ส่วนหัว: ซ้าย = ชื่อรายงาน, ขวา = เวลานัด | LN Num, Task Code, วันที่
+const head = (role, sub, t) => `<div class="head"><div class="role">${role}<small>${sub}</small></div>
+  <div class="ref"><b>${join([t.pickup ? 'เวลานัด ' + t.pickup + ' น.' : '', t.client])}</b><strong>${esc(t.taskCode)}</strong><span>${esc(DateBox.text(t.date || date))}</span></div></div>`;
+const qrBox = (file, t) => { const id = 'qr' + (++seq); pending.push([id, `${base}${file}?task=${encodeURIComponent(t.taskCode)}${t.key ? '&k=' + encodeURIComponent(t.key) : ''}`]); return `<div class="qr" id="${id}"></div>`; };
+// หน้า A4: วันที่พิมพ์ (บนซ้าย) และเลขหน้า (ล่างขวา) พิมพ์เอง แทนหัว/ท้ายกระดาษของเบราว์เซอร์
+const sheet = inner => `<section class="page"><div class="pg-date"></div>${inner}<div class="pg-no"></div></section>`;
+function stampPages() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const text = `${DateBox.text(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  const all = document.querySelectorAll('.page');
+  all.forEach((pg, i) => { pg.querySelector('.pg-date').textContent = text; pg.querySelector('.pg-no').textContent = `${i + 1}/${all.length}`; });
+}
+
+// รายงานที่ 1 : คนขับ / คนติดตาม  1 งานต่อ 1 หน้า แบ่ง 4 ชิ้นตามเส้นประ (ส่วนหัว + จุดส่ง 3 ช่อง)
+function driverPage(t) {
+  const stops = (t.stops || []).slice(0, 3);
+  const docs = `<table class="docs"><tr><th>ให้ลูกค้าเซ็น</th><th>ส่งคืน ${esc(ORIGIN)}</th><th>เอกสาร</th></tr>
+    ${DOCS.map(d => `<tr><td class="c">☐</td><td class="c">☐</td><td>${esc(d)}</td></tr>`).join('')}</table>`;
+  const line = (s, k) => `${k + 1}) ${esc(s.name)}${s.arrival ? ` (เวลานัด ${esc(s.arrival)})` : ''}${s.receiver ? ` &nbsp; ผู้รับ : ${esc(s.receiver)}` : ''}`;
+  // ส่วนหัว: จุดส่งละ 2 บรรทัด (ชื่อจุดส่ง / เวลานัด + ผู้รับ ขีดเส้นใต้)
+  const stop = (s, k) => `<div class="txt stop">${k + 1}) ${esc(s.name)}<br>เวลานัด : <u>${esc(s.arrival || '-')}</u>${s.receiver ? ` &nbsp; ผู้รับ : <u>${esc(s.receiver)}</u>` : ''}</div>`;
+  const help = Array.isArray(CFG.QR_HELP_DRIVER) && CFG.QR_HELP_DRIVER.length ? `<div class="help"><b>วิธีใช้</b>${CFG.QR_HELP_DRIVER.map(x => `<div>${esc(x)}</div>`).join('')}</div>` : '';
+  const slot = k => stops[k] ? `<div class="piece drv-stop"><div class="name">${line(stops[k], k)}</div>${docs}
+      <div class="tag"><b>${esc(t.taskCode)}</b>${esc(DateBox.text(t.date || date))}${t.plate ? '<br>ทะเบียน ' + esc(t.plate) : ''}<br><i>จุดส่งที่ ${k + 1}/${stops.length}</i></div></div>`
+    : '<div class="piece drv-stop"></div>';
+  return sheet(`
+    <div class="piece drv-main">
+      ${head('สำหรับคนขับ / คนติดตาม', 'ใช้สำหรับ : เช็คอินเข้ารับของ, อัปเดตสถานการณ์บนถนน, อัปเดตข้อมูลส่งงาน', t)}
+      <div class="big">${join([t.round ? 'ส่ง : ' + t.round : '', t.vehicleType ? 'รถ : ' + t.vehicleType : '', t.plate ? 'ทะเบียน : ' + t.plate : ''])}</div>
+      <div class="big" style="margin-top:.5mm">${(t.driver || t.phone) ? 'ผู้ขับ : ' + esc([t.driver, t.phone].filter(Boolean).join(' ')) : ''}</div>
+      <div class="cols">
+        <div><div class="lbl">จุดส่ง</div>${stops.map(stop).join('')}
+          ${t.roundTrip ? `<div class="txt stop">↩ กลับ ${esc(ORIGIN)} (รอบไป-กลับ) กด "รถกลับถึง ${esc(ORIGIN)}" เพื่อจบงาน</div>` : ''}</div>
+        <div class="qrrow">${qrBox('road.html', t)}${help}</div>
+      </div>
+    </div>
+    ${slot(0)}${slot(1)}${slot(2)}`);
+}
+
+// รายงานที่ 2 : คลังสินค้า  งานละ 1/3 หน้า (1 หน้าตัดได้ 3 ชิ้น) QR อยู่ด้านขวา
+function whPiece(t) {
+  if (!t) return '<div class="piece wh"></div>';
+  return `<div class="piece wh">
+    ${head('สำหรับคลังสินค้า', `อัปโหลดรูปส่งงานหลังรถออกจาก ${esc(ORIGIN)} ทันที`, t)}
+    <div class="big">${join([t.vehicleType, t.plate ? 'ทะเบียน ' + t.plate : '', t.driver ? 'ผู้ขับ ' + t.driver : ''])}</div>
+    <div class="cols"><div>
+      <div class="txt">บริษัทขนส่ง : ${esc(t.company || '-')}</div>
+      <div class="txt"><u>หมายเหตุ : ${esc(t.transport || '-')}</u></div>
+      <div class="lbl" style="margin-top:1.5mm">จุดส่ง</div>
+      ${(t.stops || []).slice(0, 3).map((s, k) => `<div class="txt">${k + 1}) ${esc(s.name)}${s.arrival ? ` <u>(เวลาถึงหน้างาน ${esc(s.arrival)})</u>` : ''}</div>`).join('')}
+    </div>${qrBox('pickup.html', t)}</div>
+  </div>`;
+}
+
+function draw() {
+  const k = kind(); pending = []; let html = '', pages = 0;
+  if (k !== 'wh') { html += tasks.map(driverPage).join(''); pages += tasks.length; }
+  if (k !== 'driver') for (let i = 0; i < tasks.length; i += 3) {
+    html += sheet(whPiece(tasks[i]) + whPiece(tasks[i + 1]) + whPiece(tasks[i + 2])); pages++;
+  }
+  $('pages').innerHTML = html;
+  pending.forEach(([id, text]) => new QRCode($(id), { text, width: 360, height: 360, correctLevel: QRCode.CorrectLevel.M }));
+  stampPages();
+  const name = { driver: 'รายงานคนขับ (1 งานต่อหน้า ตัด 4 ชิ้น)', wh: 'รายงานคลังสินค้า (3 งานต่อหน้า ตัด 3 ชิ้น)', both: 'ทั้ง 2 รายงาน' }[k];
+  $('info').textContent = tasks.length ? `${tasks.length} งาน · ${name} · ${pages} หน้า A4 แนวตั้ง` : 'ไม่มีแผนจัดส่งของวันที่เลือก';
+  $('printBtn').disabled = !tasks.length; $('printBtn').textContent = 'พิมพ์' + ({ driver: 'รายงานคนขับ', wh: 'รายงานคลังสินค้า', both: 'ทั้ง 2 รายงาน' }[k]);
+}
+window.addEventListener('beforeprint', stampPages);
+
+async function load() {
+  $('date').value = date; DateBox.sync($('date')); $('back').href = 'dashboard.html?date=' + date;
+  $('info').textContent = 'กำลังโหลด…'; $('pages').innerHTML = ''; $('printBtn').disabled = true; tasks = [];
+  try {
+    if (!CFG.API_URL) tasks = [1, 2, 3].map(i => ({ taskCode: 'D20261003-0' + i, date: '2026-10-03', pickup: ['07:30', '08:00', '08:30'][i - 1], client: 'LN26-55' + (3 - i), company: 'บริษัท ปทุม ทรานสปอร์ต จำกัด', transport: 'min : 4W 1.85 x 3.43 x 1.89 mm 2ฒผ-2186 (07.50 น ต้องปล่อยรถ)', plate: '3 ฒผ 2186', vehicleType: '4ล้อเทลเกต(จัมโบ้)', driver: 'กิตติศักดิ์ มะลิเลย', phone: '092-8322384', round: i === 3 ? 'ไป-กลับ' : 'รอบเดียว', roundTrip: i === 3,
+      stops: [{ name: '7-11 พหลโยธิน 55/2 วงเวียนขางเขน #24145', arrival: '09:00', receiver: 'ติดต่อ 091-876-6497 คุณจ๋า' }, { name: '7-11 ลำลูกกา 36 #24267', arrival: '10:00', receiver: 'โปรดดูข้อมูลในใบแพลน' }, { name: '7-11 ลำลูกกา 51', arrival: '10:30', receiver: '' }].slice(0, [2, 3, 1][i - 1]) }));
+    else { const d = await Auth.getJson({ action: 'plan', date }); if (!d.ok) throw new Error(d.error); tasks = d.tasks; }
+  } catch (e) { $('info').textContent = 'โหลดข้อมูลไม่สำเร็จ: ' + e.message; return; }
+  if (!window.QRCode) { $('info').textContent = 'โหลดตัวสร้าง QR ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วเปิดหน้านี้ใหม่'; return; }
+  tasks.sort((a, b) => a.taskCode.localeCompare(b.taskCode));
+  draw();
+}
+DateBox.attach($('date'));
+$('date').onchange = e => { date = e.target.value || today(); load(); };
+document.querySelectorAll('input[name=kind]').forEach(r => { r.onchange = draw; });
+$('printBtn').onclick = () => window.print();
+load();
+</script>
+</body>
+</html>
