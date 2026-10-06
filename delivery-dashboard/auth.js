@@ -65,16 +65,54 @@ window.Auth = (function () {
     return pending;
   }
 
+  /* อ่านข้อมูลให้เร็วที่สุดเมื่อ Google ตอบช้าหรือตอบผิดเป็นบางครั้ง (เวลาที่โค้ดของเราใช้จริงไม่ถึง 1 วินาที):
+     - ถ้าคำขอแรกยังไม่ตอบใน 2.5 วินาที ส่งคำขอสำรองซ้อนไปอีกหนึ่ง ใช้คำตอบที่มาถึงก่อน
+     - คำขอที่ค้างเกิน 8 วินาทีถูกยกเลิก แล้วเริ่มรอบใหม่ทันที (สูงสุด 4 รอบ)
+     การอ่านข้อมูลเรียกซ้ำได้ไม่มีผลข้างเคียง จึงใช้วิธีนี้ได้ */
+  async function getFast(url, stat) {
+    let last;
+    for (let round = 0; round < 4; round++) {
+      const ctrls = [];
+      let done = false;
+      const one = () => {
+        stat.n++;
+        const c = new AbortController(); ctrls.push(c);
+        return readJson(fetch(url, { signal: c.signal })).catch(e => { if (!done) { if (e.name === 'AbortError') stat.slow++; else stat.bad++; } throw e; });
+      };
+      const first = one();
+      // คำขอสำรอง: เริ่มเมื่อครบ 2.5 วินาที หรือทันทีที่คำขอแรกตอบผิด (แล้วแต่อย่างไหนถึงก่อน)
+      const spare = new Promise((res, rej) => {
+        let started = false;
+        const go = () => { if (started) return; started = true; if (done) rej(new Error('skip')); else one().then(res, rej); };
+        setTimeout(go, 2500); first.catch(() => setTimeout(go, 300));
+      });
+      spare.catch(() => { });
+      const kill = setTimeout(() => ctrls.forEach(c => c.abort()), 8000);
+      try {
+        const r = await Promise.any([first, spare]);
+        done = true; clearTimeout(kill); ctrls.forEach(c => c.abort());
+        return r;
+      } catch (e) {
+        done = true; clearTimeout(kill);
+        last = (e.errors && e.errors.find(x => x && x.temporary)) || new Error('เชื่อมต่อระบบไม่ได้ชั่วคราว (Google ตอบช้าเกินไป)');
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+    throw last;
+  }
+
   // เรียก API ที่ต้องเข้าสู่ระบบ ถ้ายังไม่เข้าหรือหมดอายุ จะขึ้นหน้าต่างเข้าสู่ระบบแล้วลองใหม่ให้เอง
   async function call(method, data) {
     for (let i = 0; i < 3; i++) {
       const a = get() || await login();
       const t0 = Date.now();
+      const stat = { n: 0, bad: 0, slow: 0 };
       const r = method === 'GET'
-        ? await again(() => readJson(fetch(CFG.API_URL + '?' + new URLSearchParams(Object.assign({}, data, { token: a.token })))), 4)
+        ? await getFast(CFG.API_URL + '?' + new URLSearchParams(Object.assign({}, data, { token: a.token })), stat)
         : await readJson(fetch(CFG.API_URL, { method: 'POST', body: JSON.stringify(Object.assign({}, data, { token: a.token })) }));
       // เวลาโหลด: ทั้งหมด (ที่ผู้ใช้รอ) และเฉพาะส่วนที่ Apps Script ใช้ประมวลผล ไว้ดูว่าช้าที่ขั้นไหน
-      r.took = ` · โหลด ${((Date.now() - t0) / 1000).toFixed(1)} วิ` + (r.ms != null ? ` (ระบบ ${(r.ms / 1000).toFixed(1)})` : '');
+      r.took = ` · โหลด ${((Date.now() - t0) / 1000).toFixed(1)} วิ (ระบบ ${r.ms != null ? (r.ms / 1000).toFixed(1) : '-'}` +
+        (stat.n > 1 ? ` · เรียก ${stat.n} ครั้ง ตอบผิด ${stat.bad} ช้าเกิน ${stat.slow}` : '') + ')';
       if (!r.ok && r.error === 'AUTH') { set(null); await login('กรุณาเข้าสู่ระบบอีกครั้ง'); continue; }
       return r;
     }
