@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Delivery Plan Dashboard</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b1120; --panel:#131c2e; --panel2:#1a2540; --rule:#26324d;
+  --text:#eaf0fa; --muted:#8e9bb3;
+  --waiting:#8e9bb3; --departed:#4aa8ff; --road:#f6b93b; --arrived:#34d08c; --late:#ff4d61; --follow:#ffe14d;
+  --tw:clamp(40px,min(4.4vw,7vh),84px);
+  --ly:calc(var(--tw)*.62 + .95em);   /* ระดับเส้นประ: ต่ำกว่าล้อรถ เพื่อไม่ให้รถทับวงกลมจุดส่ง */
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:"Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif;
+  display:flex;flex-direction:column;min-height:100vh;font-size:clamp(12px,min(1.15vw,2.05vh),22px)}
+button{font:inherit;color:inherit}
+
+/* ---- header ---- */
+header{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;
+  padding:clamp(6px,min(1.2vw,1.5vh),22px) clamp(16px,2.2vw,44px);background:linear-gradient(180deg,#1b2742,#141d31);
+  border-bottom:1px solid var(--rule)}
+h1{margin:0;font-size:clamp(18px,min(2.3vw,4.2vh),44px);font-weight:700;letter-spacing:.01em}
+h1 small{font-weight:500;color:var(--muted);font-size:.55em;margin-left:.6em}
+.clock{white-space:nowrap;font-size:clamp(18px,min(2.3vw,4.2vh),44px);font-weight:700;font-variant-numeric:tabular-nums}
+.datepick{background:var(--panel2);border:1px solid var(--rule);color:var(--text);border-radius:8px;
+  padding:4px 8px;font:inherit;font-size:.8em;color-scheme:dark}
+.right{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap}
+.nav{color:var(--text);text-decoration:none;background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:4px 12px;font-size:.8em;white-space:nowrap}
+.nav:hover,.nav:focus-visible{border-color:var(--departed)}
+.user{font-size:.75em;color:var(--muted);white-space:nowrap}
+.search{flex:1 1 16em;max-width:34em;position:relative;font-size:.8em}
+.search input{width:100%;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:5px 2.2em 5px 10px}
+.search input::placeholder{color:var(--muted)}
+.spin{display:inline-block;width:1em;height:1em;margin-right:.6em;vertical-align:-.15em;border:.16em solid var(--rule);border-top-color:var(--blue);border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.search input:focus-visible{outline:2px solid var(--departed);outline-offset:1px}
+.search button{all:unset;position:absolute;right:.5em;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);padding:0 .3em;font-size:1.2em}
+.search button[hidden]{display:none}
+
+.summary{display:flex;gap:10px;flex-wrap:wrap;padding:clamp(5px,min(.8vw,1.1vh),16px) clamp(16px,2.2vw,44px)}
+.sum{display:flex;align-items:baseline;gap:8px;padding:.3em .9em;border-radius:999px;background:var(--panel);
+  border:1px solid var(--rule)}
+.sum b{font-size:1.25em;font-variant-numeric:tabular-nums}
+.sum i{width:.65em;height:.65em;border-radius:50%;background:var(--c);align-self:center}
+.sum.on{border-color:var(--c);animation:glow 1s steps(2,jump-none) infinite}
+
+/* ---- board ---- */
+main{flex:1;display:flex;flex-direction:column;padding:0 clamp(16px,2.2vw,44px);min-height:0}
+.cols,.row{display:grid;grid-template-columns:minmax(190px,22vw) 1fr minmax(240px,30vw);column-gap:clamp(10px,1.4vw,28px)}
+.cols{color:var(--muted);font-weight:600;padding:.3em 0;border-bottom:1px solid var(--rule)}
+.cols div:nth-child(2){text-align:center}
+.rows{flex:1;display:flex;flex-direction:column;min-height:0}
+.row{flex:0 0 20%;min-height:0;align-items:center;border-bottom:1px solid var(--rule);position:relative;--c:var(--waiting);
+  padding:.15em 0}
+.pick{display:flex;flex-wrap:wrap;align-items:center;gap:.15em .45em}
+.pick .time{flex:0 0 100%}
+.pick .chip{margin-top:0}
+.row.s-departed{--c:var(--departed)} .row.s-road{--c:var(--road)} .row.s-arrived{--c:var(--arrived)}
+.row.late{--c:var(--late);--f:var(--late);--fb:rgba(255,77,97,.10);--ft:#fff}
+.row.follow{--f:var(--follow);--fb:rgba(255,225,77,.08);--ft:#1c1600}
+/* กรอบกระพริบ: แดง = Delay (เลยเวลาที่ต้องถึง), เหลือง = Follow (เช็คอินช้า / ส่งข้อมูลบนถนนช้า) */
+.row.flag::before{content:"";position:absolute;inset:3px -10px;border-radius:12px;border:2px solid var(--f);
+  background:var(--fb);animation:blink 1s steps(2,jump-none) infinite;pointer-events:none}
+
+.time{font-size:1.5em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.time span{font-size:.6em;font-weight:500;color:var(--muted);margin-left:.4em}
+.chip{display:inline-block;margin-top:.3em;padding:.1em .7em;border-radius:6px;background:var(--panel2);
+  border:1px solid var(--rule);font-size:.82em;color:#c9d4e8;font-variant-numeric:tabular-nums}
+.stops{list-style:none;margin:0;padding:0;display:grid;gap:.22em;min-width:0}
+.stops li{display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;column-gap:.5em;min-width:0;line-height:1.25}
+.num{display:inline-grid;place-items:center;width:1.5em;height:1.5em;border-radius:50%;border:2px solid var(--c);
+  font-size:.78em;font-weight:800;color:#fff;background:var(--bg);font-variant-numeric:tabular-nums;line-height:1}
+.stops b{font-size:1.12em;font-variant-numeric:tabular-nums}
+.stops .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.stops .act{font-size:.8em;font-weight:600;color:var(--arrived);white-space:nowrap;font-variant-numeric:tabular-nums}
+.stops li.done .num,.dot.done{background:var(--arrived);border-color:var(--arrived);color:#06101f}
+.stops li.site .num,.dot.site{background:var(--road);border-color:var(--road);color:#1c1300}
+.stops li.done .nm,.stops li.done b{color:var(--muted)}
+.stops li.over .num,.dot.over{background:var(--late);border-color:var(--late);color:#fff}
+.stops li.over b{color:var(--late)}
+.stops li.slow .act{color:var(--road)}
+.stops .act.eta{color:var(--departed)}
+.stops .act.eta.slow{color:var(--road)}
+.stops li{position:relative;cursor:pointer;border-radius:6px}
+.stops li:hover{background:rgba(255,255,255,.05)}
+/* จุดส่งบนเส้นทาง: ใหญ่และตัวเลขสีขาวบนพื้นทึบ ให้อ่านได้จากระยะไกล */
+.dot{position:absolute;z-index:1;top:calc(var(--ly) + 1px);left:calc(var(--q) * 100%);transform:translate(-50%,-50%);
+  font-size:.92em;width:1.7em;height:1.7em;border-width:3px;box-shadow:0 0 0 3px var(--bg)}
+.stip{position:absolute;right:0;top:100%;z-index:25;width:max-content;max-width:min(30em,70vw);background:#243152;border:1px solid #3a4a72;
+  border-radius:10px;padding:.6em .9em;font-size:.82em;line-height:1.5;box-shadow:0 12px 30px rgba(0,0,0,.55);display:none;cursor:default;
+  white-space:normal;overflow-wrap:anywhere}
+.stip b{display:block;color:var(--muted);font-weight:500}
+.stip a{color:var(--departed)}
+.row.up .stip{top:auto;bottom:100%}
+@media (hover:hover){.stops li:hover .stip{display:block}}
+
+/* ---- track ---- */
+.track{position:relative;height:calc(var(--ly) + 2.5em);margin:0 calc(var(--tw)*.45)}
+.line{position:absolute;left:0;right:0;top:var(--ly);border-top:2px dashed var(--c);opacity:.75}
+.line::before{content:"";position:absolute;top:-6px;left:-5px;width:10px;height:10px;border-radius:50%;background:var(--c)}
+.mover{position:absolute;z-index:2;top:0;left:calc(var(--p) * 100%);width:var(--tw);margin-left:calc(var(--tw)/-2);
+  transition:left 1.2s ease;display:flex;flex-direction:column;align-items:center}
+.truck{all:unset;cursor:pointer;position:relative;width:var(--tw);height:calc(var(--tw)*.62);color:var(--text);display:block}
+.truck svg{width:100%;height:100%;display:block}
+.truck:focus-visible{outline:2px solid var(--departed);outline-offset:4px;border-radius:8px}
+.truck svg.bubble{position:absolute;left:auto;right:-.15em;top:-.5em;width:calc(var(--tw)*.34);height:calc(var(--tw)*.3);color:var(--arrived)}
+.stat{position:absolute;top:calc(var(--ly) + 1.3em);white-space:nowrap;font-size:.8em;font-weight:600;color:var(--c)}
+/* สถานะเช็คอิน อยู่ที่จุดเริ่มต้นตลอด: รถยังไม่เข้า (เทา) / รถเข้า + เวลา (เขียว) */
+.origin{position:absolute;left:-.7em;top:calc(var(--ly) + 1.04em);font-size:.8em;font-weight:600;white-space:nowrap;color:var(--muted)}
+.origin b{color:var(--c);font-weight:600}
+.row.in .origin{color:var(--arrived)}
+.row.in .truck{color:var(--arrived)}
+.row.right .stat{right:0}.row.left .stat{left:0}
+/* หน้ารายการยกเลิก: แถวสีจาง มีป้าย CANCELED ไม่กระพริบ */
+.row.cx .pick,.row.cx .track,.row.cx .arr{opacity:.55}
+.row.cx .mover::before{content:attr(data-flag);position:absolute;z-index:3;top:-.75em;left:0;transform:translateX(-45%);
+  background:var(--muted);color:#0b1120;font-size:.72em;font-weight:700;letter-spacing:.08em;padding:.05em .6em;border-radius:5px}
+.sum.pick{cursor:pointer;user-select:none;transition:background .15s,border-color .15s}
+.sum.pick:hover{border-color:var(--c,var(--text))}
+.sum.pick:focus-visible{outline:2px solid var(--c,var(--text));outline-offset:2px}
+.sum.pick.sel{border-color:var(--c,var(--text));background:var(--panel2);box-shadow:0 0 0 1px var(--c,var(--text)) inset}
+a.sum.cxl{text-decoration:none;color:#ffb3bd;border-color:#7a3340;background:#3a1820;cursor:pointer}
+a.sum.cxl:hover,a.sum.cxl:focus-visible{border-color:var(--late);outline:none}
+.row.flag .mover::before{content:attr(data-flag);position:absolute;z-index:3;top:-.75em;left:0;transform:translateX(-45%);
+  background:var(--f);color:var(--ft);font-size:.72em;font-weight:700;letter-spacing:.08em;padding:.05em .6em;border-radius:5px;
+  animation:blink 1s steps(2,jump-none) infinite}
+
+/* ---- hover card ---- */
+.tip{position:absolute;top:calc(var(--ly) + 2.6em);left:50%;transform:translateX(-50%);z-index:20;width:max-content;
+  max-width:min(30em,60vw);background:#243152;border:1px solid #3a4a72;border-radius:10px;padding:.7em 1em;font-size:.82em;
+  line-height:1.55;box-shadow:0 12px 30px rgba(0,0,0,.55);display:none;text-align:left;white-space:normal}
+.tip b{color:var(--muted);font-weight:500}
+.tip em{display:block;margin-top:.3em;font-style:normal;color:var(--departed)}
+.row.up .tip{top:auto;bottom:calc(100% + .4em)}
+.row.right .tip{left:auto;right:0;transform:none}
+.row.left .tip{left:0;transform:none}
+@media (hover:hover){.mover:hover .tip,.truck:focus-visible ~ .tip{display:block}}
+
+/* ---- footer ---- */
+footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:clamp(4px,min(.8vw,1vh),16px) clamp(16px,2.2vw,44px);color:var(--muted);font-size:.85em}
+.legend{display:flex;gap:1.2em;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--c);margin-right:.4em}
+.pager{display:flex;align-items:center;gap:.6em}
+.pager button{all:unset;cursor:pointer;width:2em;height:2em;border-radius:50%;background:var(--panel2);text-align:center;
+  line-height:2em;border:1px solid var(--rule)}
+.pager button:focus-visible{outline:2px solid var(--departed)}
+.dots{display:flex;gap:.4em}.dots i{width:.6em;height:.6em;border-radius:50%;background:var(--rule)}.dots i.on{background:var(--text)}
+.empty{flex:1;display:grid;place-items:center;color:var(--muted);font-size:1.3em;text-align:center;padding:3em 1em}
+.banner{background:#4a3a10;color:#ffe2a0;padding:.4em 1em;text-align:center;font-size:.85em}
+
+/* ---- modal ---- */
+dialog{background:var(--panel);color:var(--text);border:1px solid #3a4a72;border-radius:14px;padding:0;
+  width:min(720px,94vw);max-height:90vh;font-size:clamp(14px,1vw,18px)}
+dialog::backdrop{background:rgba(3,6,14,.72)}
+.dh{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--rule);
+  position:sticky;top:0;background:var(--panel)}
+.dh h2{margin:0;font-size:1.25em}
+.dh button:disabled{opacity:.35;cursor:not-allowed}
+.dh button[hidden]{display:none}
+.dh button,.eb button{all:unset;cursor:pointer;padding:.2em .8em;border-radius:8px;background:var(--panel2);border:1px solid var(--rule)}
+.dh button[hidden]{display:none}
+.dh button:focus-visible,.eb button:focus-visible{outline:2px solid var(--departed)}
+.dh div{display:flex;gap:8px}
+.eb{display:flex;gap:10px;justify-content:flex-end;margin-top:1em;position:sticky;bottom:0;background:var(--panel);padding:.6em 0}
+.eb .pri{background:var(--departed);border-color:var(--departed);color:#06101f;font-weight:700}
+.ef{display:grid;grid-template-columns:repeat(2,1fr);gap:.6em 1em}
+.ef label{display:flex;flex-direction:column;gap:.2em;color:var(--muted);font-size:.9em;min-width:0}
+.ef label.wide{grid-column:1 / -1}
+.ef input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:.4em .6em;min-width:0;color-scheme:dark}
+.ef input:focus-visible{outline:2px solid var(--departed)}
+.ef h3{grid-column:1 / -1;margin:.6em 0 0;font-size:1em}
+.emsg{color:var(--late);margin-top:.6em}
+.db{padding:14px 18px 20px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.25em 1em;margin:0 0 1em}
+.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.log{border-top:1px solid var(--rule);padding-top:.8em;margin-top:.8em}
+.log h3{margin:0 0 .3em;font-size:1em}
+.log p{margin:.2em 0;color:#c9d4e8;white-space:pre-wrap}
+.log .t{color:var(--muted);font-size:.9em}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:.5em}
+.thumbs a{display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--panel2);border:1px solid var(--rule)}
+.thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+.badge{display:inline-block;padding:.05em .7em;border-radius:999px;background:var(--c);color:#08101f;font-weight:700;font-size:.85em}
+
+@keyframes blink{50%{opacity:.15}}
+@keyframes glow{50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 45%,transparent)}}
+
+/* ---- มือถือ ---- */
+@media (max-width:760px){
+  :root{--tw:60px}
+  html,body{height:auto}
+  body{font-size:15px}
+  .cols{display:none}
+  main,.rows{display:block}
+  .row{flex:none;grid-template-columns:1fr;row-gap:.5em;padding:.9em 0 .6em}
+  .pick .time{flex:0 0 auto}
+  .row .track{grid-row:3;margin-top:1.4em}
+  .row.flag::before{inset:2px -8px}
+  .ef{grid-template-columns:1fr}
+  .stip{display:none!important}
+  .time{font-size:1.25em}
+  .tip{display:none!important}
+}
+</style>
+</head>
+<body>
+<div id="banner" class="banner" hidden></div>
+<header>
+  <h1 id="title">Delivery Plan</h1>
+  <div class="search"><input id="q" type="search" autocomplete="off" aria-label="ค้นหางาน"
+    placeholder="ค้นหา Task Code, LN Num, ทะเบียนรถ, จุดส่ง (หลายค่าคั่นด้วย , )"><button id="qClear" type="button" aria-label="ล้างคำค้นหา" hidden>×</button></div>
+  <div class="right">
+    <a class="nav" href="index.html">ปฏิทิน</a>
+    <a class="nav" href="dashboard.html">วันนี้</a>
+    <a class="nav" id="qrLink" href="qr.html">QR</a>
+    <span class="user" id="userBox"></span>
+    <input class="datepick" id="datepick" type="date" aria-label="เลือกวันที่">
+    <div class="clock" id="clock"></div>
+  </div>
+</header>
+<div class="summary" id="summary"></div>
+<main>
+  <div class="cols"><div>ตารางเวลา</div><div>สถานะรถ</div><div>จุดส่ง / เวลาถึง</div></div>
+  <div class="rows" id="rows"></div>
+</main>
+<footer>
+  <div class="legend">
+    <span style="--c:var(--waiting)">ยังไม่ออก</span><span style="--c:var(--departed)">ออกแล้ว</span>
+    <span style="--c:var(--road)">กำลังส่ง</span><span style="--c:var(--arrived)">จบงาน</span>
+    <span style="--c:var(--follow)">Follow (เช็คอินช้า / เช็คอินแล้วไม่ออก / ส่งข้อมูลบนถนนช้า / กลับช้า)</span><span style="--c:var(--late)">Delay (เลยเวลาถึง)</span>
+  </div>
+  <div class="pager" id="pager"></div>
+  <div id="updated"></div>
+</footer>
+<dialog id="dlg"><div class="dh"><h2 id="dlgTitle"></h2><div><button id="dlgEdit">แก้ไข</button><button id="dlgCancel" hidden>ยกเลิกงาน</button><button id="dlgDel" hidden>ลบงาน</button><button id="dlgClose">ปิด</button></div></div><div class="emsg" id="actMsg" role="alert"></div><div class="db" id="dlgBody"></div></dialog>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-truck" viewBox="0 0 100 62">
+    <g fill="currentColor">
+      <rect x="2" y="14" width="22" height="4" rx="2"/><rect x="8" y="24" width="16" height="4" rx="2"/><rect x="2" y="34" width="22" height="4" rx="2"/>
+      <path d="M30 6h38a3 3 0 0 1 3 3v35H30a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3z"/>
+      <path d="M74 18h11a4 4 0 0 1 3.4 1.9l7.7 12.3a4 4 0 0 1 .6 2.1V44H74z"/>
+      <rect x="27" y="46" width="70" height="4" rx="2"/>
+    </g>
+    <path d="M79 23h6l5.5 9H79z" fill="var(--bg)"/>
+    <circle cx="43" cy="51" r="8.5" fill="var(--bg)"/><circle cx="43" cy="51" r="5.5" fill="currentColor"/>
+    <circle cx="82" cy="51" r="8.5" fill="var(--bg)"/><circle cx="82" cy="51" r="5.5" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-lorry" viewBox="0 0 100 62">
+    <g fill="currentColor">
+      <rect x="1" y="16" width="9" height="3.5" rx="1.7"/><rect x="3" y="25" width="7" height="3.5" rx="1.7"/><rect x="1" y="34" width="9" height="3.5" rx="1.7"/>
+      <path d="M16 1h52a3 3 0 0 1 3 3v40H16a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z"/>
+      <path d="M74 14h12a4 4 0 0 1 3.5 2l7 12.5a4 4 0 0 1 .5 2V44H74z"/>
+      <rect x="13" y="46" width="85" height="4" rx="2"/>
+    </g>
+    <path d="M79 19h6.5l5.5 10H79z" fill="var(--bg)"/>
+    <g fill="var(--bg)"><rect x="24" y="1" width="1.6" height="43"/><rect x="35" y="1" width="1.6" height="43"/><rect x="46" y="1" width="1.6" height="43"/><rect x="57" y="1" width="1.6" height="43"/></g>
+    <circle cx="26" cy="51" r="8.5" fill="var(--bg)"/><circle cx="26" cy="51" r="5.8" fill="currentColor"/>
+    <circle cx="43" cy="51" r="8.5" fill="var(--bg)"/><circle cx="43" cy="51" r="5.8" fill="currentColor"/>
+    <circle cx="85" cy="51" r="8.5" fill="var(--bg)"/><circle cx="85" cy="51" r="5.8" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-car" viewBox="0 0 100 62">
+    <g fill="currentColor">
+      <rect x="2" y="18" width="16" height="4" rx="2"/><rect x="6" y="27" width="12" height="4" rx="2"/><rect x="2" y="36" width="16" height="4" rx="2"/>
+      <path d="M25 47V30q0-3 2.5-4.5L36 11q1.5-3 5-3h25q3 0 5 2.5L81 24l11 3q5 1.5 5 6.5V44q0 3-3 3z"/>
+    </g>
+    <path d="M40.5 13H52v11H34.5z" fill="var(--bg)"/><path d="M56 13h9.5L74 24H56z" fill="var(--bg)"/>
+    <circle cx="41" cy="49" r="10.5" fill="var(--bg)"/><circle cx="41" cy="49" r="7.5" fill="currentColor"/><circle cx="41" cy="49" r="3" fill="var(--bg)"/>
+    <circle cx="81" cy="49" r="10.5" fill="var(--bg)"/><circle cx="81" cy="49" r="7.5" fill="currentColor"/><circle cx="81" cy="49" r="3" fill="var(--bg)"/>
+  </symbol>
+  <symbol id="i-moto" viewBox="0 0 100 62">
+    <g fill="currentColor">
+      <rect x="2" y="14" width="18" height="4" rx="2"/><rect x="6" y="24" width="14" height="4" rx="2"/><rect x="2" y="34" width="18" height="4" rx="2"/>
+      <rect x="27" y="8" width="24" height="19" rx="3"/>
+      <rect x="33" y="29" width="34" height="6" rx="3"/>
+      <path d="M38 37h32l6 9a3 3 0 0 1-2.5 4.6H44a3 3 0 0 1-2.7-1.7z"/>
+      <rect x="69" y="12" width="14" height="4.5" rx="2.2"/>
+    </g>
+    <path d="M77 15l10 34" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+    <circle cx="40" cy="49" r="12" fill="var(--bg)"/><circle cx="40" cy="49" r="9.5" fill="currentColor"/><circle cx="40" cy="49" r="4.5" fill="var(--bg)"/>
+    <circle cx="87" cy="49" r="12" fill="var(--bg)"/><circle cx="87" cy="49" r="9.5" fill="currentColor"/><circle cx="87" cy="49" r="4.5" fill="var(--bg)"/>
+  </symbol>
+  <symbol id="i-bubble" viewBox="0 0 36 32">
+    <path fill="currentColor" d="M18 2C8.6 2 1 7.8 1 15c0 3.7 2 7 5.3 9.4L5 31l7.4-4.1c1.8.4 3.7.6 5.6.6 9.4 0 17-5.8 17-13S27.4 2 18 2z"/>
+  </symbol>
+</svg>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script>
+const CFG = window.APP_CONFIG || {};
+const DEMO = !SB.ON;
+const PER = CFG.PER_PAGE || 5;
+const DAYS = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+const LABEL = {waiting:'ยังไม่ออก', departed:'ออกแล้ว', road:'กำลังส่ง', arrived:'จบงาน'};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const urlDate = new URLSearchParams(location.search).get('date');
+let pickedDate = urlDate || null;      // null = ตามวันปัจจุบันเสมอ
+let tasks = [], page = 0, editing = false, openCode = null;
+// view=canceled : แสดงเฉพาะงานที่ Task Status = Canceled ของวันนั้น (ปกติงานยกเลิกไม่แสดงในแผน)
+const showCx = new URLSearchParams(location.search).get('view') === 'canceled';
+let nCx = 0;
+const split = all => { nCx = all.filter(t => t.canceled).length; return all.filter(t => !!t.canceled === showCx); };
+
+/* ---------- ค้นหา: ใส่ได้หลายค่า คั่นด้วย , แสดงเฉพาะงานที่ตรงกับค่าใดค่าหนึ่ง
+   ค้นใน Task Code, Client Name, ทะเบียนรถ, จุดที่ 1-3 (ไม่สนช่องว่างและตัวพิมพ์เล็กใหญ่) ---------- */
+const norm = v => String(v || '').toLowerCase().replace(/[\s-]+/g, '');
+let terms = [];
+let sf = '';                // กรองตามสถานะ: '' = ทั้งหมด | waiting | departed | road | arrived | follow | delay
+const SF_NAME = {waiting:'ยังไม่ออก', departed:'ออกแล้ว', road:'กำลังส่ง', arrived:'จบงาน', follow:'Follow', delay:'Delay'};
+const hay = t => [t.taskCode, t.client, t.plate].concat((t.stops || []).map(sp => sp.name)).map(norm);
+const visible0 = () => terms.length ? tasks.filter(t => { const h = hay(t); return terms.some(q => h.some(x => x.includes(q))); }) : tasks;
+
+const hit = x => !sf || x.s === sf || x.flag === sf;
+const visible = () => { const b = visible0(); return sf && !showCx ? b.filter(t => hit(state(t))) : b; };
+
+/* ---------- เวลา (ยึดเวลาไทยเสมอ) ---------- */
+const DEMO_NOW = new Date('2026-10-03T10:15:00+07:00');
+const now = () => DEMO ? DEMO_NOW : new Date();
+const bkk = d => new Date(d.getTime() + 7 * 3600e3).toISOString();   // yyyy-mm-ddTHH:MM ในเวลาไทย
+const today = () => bkk(now()).slice(0, 10);
+const hhmm = d => bkk(d instanceof Date ? d : new Date(d)).slice(11, 16);
+const at = (date, t) => new Date(`${date}T${t || '00:00'}:00+07:00`);
+const shortT = t => String(t || '').replace(/^0/, '');
+const D = v => v ? new Date(v) : null;
+
+/* ---------- สถานะ ----------
+   รถ 1 คันมีจุดส่ง 1-3 จุด ตำแหน่งรถ: ต้นทาง = 0, จุดที่ i = i/n, จุดสุดท้าย = 1
+   Delay  = เลยเวลาที่ต้องถึงจุดใดแล้วรถยังไม่ถึงหน้างานจุดนั้น (กรอบแดง)
+   Follow = รถออกแล้วเกินเวลาที่กำหนด ยังไม่ส่งสถานการณ์บนถนน (กรอบเหลือง) */
+function state(t) {
+  const stops = t.stops || [], ns = Math.max(1, stops.length), z = t.state || {};
+  const arrive = (z.arrive || []).map(D), done = (z.done || []).map(D), eta = z.eta || [];
+  // งานไป-กลับ: เพิ่มจุดสุดท้าย "กลับ SCM" ต่อจากจุดส่ง งานจะจบเมื่อรถกลับถึง SCM
+  const rt = !!t.roundTrip, n = ns + (rt ? 1 : 0);
+  if (rt) { arrive[ns] = D(z.returned); done[ns] = D(z.returned); }
+  const depart = D(z.depart), lastRoad = D(z.lastRoad), checkin = z.checkin ? D(z.checkin.time) : null;
+  const finished = !!done[n - 1];
+  let L = 0, A = 0;                                   // จุดล่าสุดที่ลงงานเสร็จ / ที่ถึงหน้างาน
+  for (let i = 0; i < n; i++) { if (done[i]) L = i + 1; if (arrive[i]) A = i + 1; }
+  const lastT = L ? done[L - 1] : null;
+  let s, when = null, p, label;
+  if (finished) { s = 'arrived'; when = done[n - 1]; p = 1; label = rt ? 'กลับถึง SCM จบงาน' : 'จบงาน'; }
+  else if (A > L) { s = 'road'; when = arrive[A - 1]; p = A / n; label = `ถึงจุด ${A} กำลังลงงาน`; }
+  else if (lastRoad && (!lastT || lastRoad > lastT)) { s = 'road'; when = lastRoad; p = (L + .5) / n; label = 'อยู่บนถนน'; }
+  else if (L) { s = 'road'; when = lastT; p = L / n; label = rt && L === ns ? 'ลงงานครบ กำลังกลับ SCM' : `ส่งจุด ${L}/${ns} แล้ว`; }
+  else if (depart) { s = 'departed'; when = depart; p = .25 / n; label = 'ออกแล้ว'; }
+  else { s = 'waiting'; p = 0; label = 'ยังไม่ออก'; }
+
+  const nowT = now(), over = {}, limit = (CFG.NO_ROAD_UPDATE_MIN || 60) * 60e3;
+  let flag = '', why = '';
+  if (!finished) {
+    stops.forEach((st, i) => {
+      if (!arrive[i] && st.arrival && nowT > at(t.date, st.arrival)) {
+        over[i] = true;
+        if (!flag) { flag = 'delay'; why = `เลยเวลาถึงจุดที่ ${i + 1} (${shortT(st.arrival)}) แล้วรถยังไม่ถึงหน้างาน`; }
+      }
+    });
+    // รถยังไม่เช็คอินหลังเลยตารางเวลาเกินที่กำหนด (ค่าเริ่มต้น 10 นาที)
+    const lateIn = (CFG.CHECKIN_LATE_MIN == null ? 10 : CFG.CHECKIN_LATE_MIN) * 60e3;
+    if (!flag && !checkin && !depart && t.pickup && nowT - at(t.date, t.pickup) > lateIn) {
+      flag = 'follow'; why = `เลยตารางเวลา ${shortT(t.pickup)} เกิน ${lateIn / 60e3} นาทีแล้ว รถยังไม่เช็คอิน`;
+    }
+    // รถเช็คอินแล้วแต่ยังไม่ออกจากต้นทางเกินที่กำหนด (ค่าเริ่มต้น 30 นาที)
+    const waitOut = (CFG.CHECKIN_WAIT_MIN == null ? 30 : CFG.CHECKIN_WAIT_MIN) * 60e3;
+    if (!flag && z.checkin && !depart && !A && !L && !lastRoad && nowT - new Date(z.checkin.time) > waitOut) {
+      flag = 'follow'; why = `รถเช็คอินแล้วเกิน ${waitOut / 60e3} นาที ยังไม่ออกจาก ${CFG.ORIGIN || 'SCM'}`;
+    }
+    // งานไป-กลับ: ลงงานครบแล้ว ถ้าใช้เวลากลับนานกว่าเวลาขาไป (รถออก -> ถึงจุดส่งสุดท้าย) แล้วยังไม่กดกลับถึงต้นทาง
+    if (!flag && rt && L === ns && depart && arrive[ns - 1] && done[ns - 1]) {
+      const goMs = arrive[ns - 1] - depart, backMs = nowT - done[ns - 1];
+      if (goMs > 0 && backMs > goMs) { flag = 'follow'; why = `ขากลับใช้เวลาเกินขาไป (${Math.round(goMs / 60e3)} นาที) แล้ว รถยังไม่กลับถึง ${CFG.ORIGIN || 'SCM'}`; }
+    }
+    if (!flag && depart && A <= L && L < ns) {
+      // FOLLOW_REPEAT = true: นับจากข้อมูลล่าสุดทุกครั้ง, false: นับเฉพาะช่วงหลังรถออกจนถึงอัปเดตแรก
+      const ref = CFG.FOLLOW_REPEAT ? new Date(Math.max(depart, lastRoad || 0, lastT || 0)) : (!lastRoad && !A ? depart : null);
+      if (ref && nowT - ref > limit) { flag = 'follow'; why = `เกิน ${CFG.NO_ROAD_UPDATE_MIN || 60} นาทีแล้ว ยังไม่มีอัปเดตสถานการณ์บนถนน`; }
+    }
+  }
+  return { s, when, p, label, flag, why, arrive, done, eta, over, n, ns, rt, checkin, plate: z.checkin ? z.checkin.plate : '', bubble: (z.roadCount || 0) > 0 };
+}
+
+// ประเภทรถเป็นมอเตอร์ไซค์ (รวมคำสะกดที่พบบ่อย) ใช้ไอคอนมอเตอร์ไซค์แทนรถบรรทุก
+const ICON_ID = { van: 'i-truck', truck: 'i-lorry', moto: 'i-moto', car: 'i-car' };
+const ICON_RULES = (Array.isArray(CFG.VEHICLE_ICONS) && CFG.VEHICLE_ICONS.length ? CFG.VEHICLE_ICONS
+  : [['มอเตอร์ไซ|มอไซ|จักรยานยนต์', 'moto'], ['10\\s*ล้อ|6\\s*ล้อ', 'truck'], ['เก๋ง|5\\s*ประตู', 'car'], ['4\\s*ล้อ|cargo|คาร์โก้', 'van']])
+  .map(r => { try { return [new RegExp(r[0], 'i'), ICON_ID[r[1]] || 'i-truck']; } catch (e) { return null; } }).filter(Boolean);
+const iconOf = t => { const v = t.vehicleType || '', r = ICON_RULES.find(x => x[0].test(v)); return r ? r[1] : 'i-truck'; };
+
+/* ---------- โหลดข้อมูล ---------- */
+// แสดงข้อมูลที่โหลดไว้ครั้งก่อนทันที (ถ้ามี) แล้วค่อยแทนด้วยข้อมูลล่าสุดเมื่อเซิร์ฟเวอร์ตอบ หน้าจอจึงไม่ว่างระหว่างรอ
+const SNAP = 'deliveryPlanSnap';
+let lastOk = '', retryT = 0;
+let shown = '', loadSeq = 0, phase = 'loading';     // phase: loading = ยังไม่ได้ข้อมูลของวันนี้, ok, error
+const byTime = a => a.sort((a, b) => (a.pickup || '').localeCompare(b.pickup || '') || a.taskCode.localeCompare(b.taskCode));
+async function load() {
+  const date = pickedDate || today(), my = ++loadSeq;
+  if (shown !== date) {
+    let snap = null;
+    try { if (!DEMO && Auth.get()) snap = JSON.parse(localStorage.getItem(SNAP) || 'null'); } catch (e) { }
+    tasks = split(snap && snap.date === date ? byTime(snap.tasks) : []);
+    shown = date; phase = 'loading'; lastOk = '';
+    $('updated').textContent = 'กำลังโหลดข้อมูล…';
+    render();
+  }
+  try {
+    let data;
+    if (DEMO) data = { ok: true, tasks: demoTasks().filter(t => t.date === date) };
+    else data = await Auth.getJson({ action: 'plan', date });
+    Auth.badge($('userBox'));
+    if (my !== loadSeq) return;                 // มีการเปลี่ยนวันระหว่างรอ ใช้ผลของคำขอล่าสุดเท่านั้น
+    if (!data.ok) throw new Error(data.error);
+    const all = byTime(data.tasks); tasks = split(all); phase = 'ok';
+    lastOk = hhmm(new Date()); clearTimeout(retryT);
+    $('updated').textContent = 'อัปเดตล่าสุด ' + lastOk + ' น.' + (data.took || '');
+    try { if (!DEMO) localStorage.setItem(SNAP, JSON.stringify({ date, tasks: all })); } catch (e) { }
+  } catch (e) {
+    if (my !== loadSeq) return;
+    if (phase === 'loading') phase = 'error';
+    $('updated').textContent = (lastOk ? 'ข้อมูลล่าสุด ' + lastOk + ' น. · ' : '') + 'โหลดข้อมูลไม่สำเร็จ กำลังลองใหม่ · ' + e.message;
+    clearTimeout(retryT); retryT = setTimeout(load, 30000);          // ไม่รอรอบปกติ ลองใหม่ใน 30 วินาที
+  }
+  render();
+  if ($('dlg').open && !editing && openCode) openDetail(openCode);
+}
+
+function render() {
+  const date = pickedDate || today();
+  const d = at(date, '12:00');
+  const [y, m, dd] = date.split('-');
+  $('title').innerHTML = `${showCx ? 'รายการยกเลิก' : 'Delivery Plan'} ${DAYS[new Date(d.getTime() + 7 * 3600e3).getUTCDay()]} ${dd}-${m}-${y}`;
+  if ($('datepick').value !== date) $('datepick').value = date;
+  DateBox.sync($('datepick'));
+  $('qrLink').href = 'qr.html?date=' + date;
+  const planUrl = 'dashboard.html' + (pickedDate ? '?date=' + date : '');
+
+  const base = visible0(), stAll = base.map(state);
+  if (showCx) stAll.forEach(x => { x.flag = ''; x.why = ''; x.over = {}; });      // งานยกเลิกไม่เตือน Delay / Follow
+  const keep = stAll.map(x => showCx || hit(x));
+  const list = base.filter((_, i) => keep[i]), st = stAll.filter((_, i) => keep[i]);
+  const cnt = { waiting: 0, departed: 0, road: 0, arrived: 0 };
+  stAll.forEach(x => cnt[x.s]++);
+  const nF = stAll.filter(x => x.flag === 'follow').length, nD = stAll.filter(x => x.flag === 'delay').length;
+  $('summary').innerHTML = showCx ? `<div class="sum on" style="--c:var(--muted)"><i></i><span>งานที่ยกเลิก</span><b>${list.length}${terms.length ? '/' + tasks.length : ''}</b></div><a class="sum cxl" id="cxLink" href="${planUrl}">‹ กลับหน้าแผน</a>` :
+    `<div class="sum pick${sf ? '' : ' sel'}" data-f="" role="button" tabindex="0" title="แสดงทุกสถานะ"><span>${terms.length ? 'พบ' : 'ทั้งหมด'}</span><b>${base.length}${terms.length ? '/' + tasks.length : ''}</b></div>` +
+    Object.keys(cnt).map(k => `<div class="sum pick${sf === k ? ' sel' : ''}" data-f="${k}" role="button" tabindex="0" style="--c:var(--${k})" title="แสดงเฉพาะงานสถานะ ${LABEL[k]}"><i></i><span>${LABEL[k]}</span><b>${cnt[k]}</b></div>`).join('') +
+    `<div class="sum pick ${nF ? 'on' : ''}${sf === 'follow' ? ' sel' : ''}" data-f="follow" role="button" tabindex="0" style="--c:var(--follow)" title="แสดงเฉพาะงาน Follow"><i></i><span>Follow</span><b>${nF}</b></div>` +
+    `<div class="sum pick ${nD ? 'on' : ''}${sf === 'delay' ? ' sel' : ''}" data-f="delay" role="button" tabindex="0" style="--c:var(--late)" title="แสดงเฉพาะงาน Delay"><i></i><span>Delay</span><b>${nD}</b></div>` +
+    (nCx ? `<a class="sum cxl" id="cxLink" href="dashboard.html?date=${date}&view=canceled" title="ดูรายการที่ยกเลิก"><span>ยกเลิก</span><b>${nCx}</b></a>` : '');
+
+  const pages = Math.max(1, Math.ceil(list.length / PER));
+  if (page >= pages) page = 0;
+  const slice = list.slice(page * PER, page * PER + PER);
+
+  if (!list.length) {
+    $('rows').innerHTML = `<div class="empty">${tasks.length ? (sf && !showCx ? `ไม่มีงานสถานะ ${SF_NAME[sf]}${terms.length ? ' ที่ตรงกับคำค้นหา' : ''} (กดปุ่ม “ทั้งหมด” เพื่อแสดงทุกงาน)` : 'ไม่พบงานที่ตรงกับคำค้นหา') : phase === 'loading' ? '<span class="spin"></span>กำลังโหลดข้อมูล…' : phase === 'error' ? 'โหลดข้อมูลไม่สำเร็จ กำลังลองใหม่อัตโนมัติ' : `${showCx ? 'ไม่มีรายการยกเลิก' : 'ไม่มีแผนจัดส่ง'}ของวันที่ ${dd}-${m}-${y}`}</div>`;
+  } else {
+    $('rows').innerHTML = slice.map((t, i) => {
+      const x = st[page * PER + i];
+      const side = x.p > .8 ? 'right' : x.p < .1 ? 'left' : '';
+      const cls = k => x.done[k] ? 'done' : x.arrive[k] ? 'site' : x.over[k] ? 'over' : '';
+      const dots = t.stops.map((sp, k) => `<span class="num dot ${cls(k)}" style="--q:${(k + 1) / x.n}">${x.done[k] ? '✓' : k + 1}</span>`).join('')
+        + (x.rt ? `<span class="num dot ${cls(x.ns)}" style="--q:1" title="กลับ SCM">${x.done[x.ns] ? '✓' : '↩'}</span>` : '');
+      const list = t.stops.map((sp, k) => {
+        const a = x.arrive[k], plan = sp.arrival ? at(t.date, sp.arrival) : null;
+        let act = '';
+        if (a) act = `<span class="act ${plan && a > plan ? 'slow' : ''}">ถึง ${hhmm(a)}</span>`;
+        else if (x.eta[k]) act = `<span class="act eta ${plan && at(t.date, x.eta[k]) > plan ? 'slow' : ''}">คาดว่าจะถึง ${esc(shortT(x.eta[k]))}</span>`;
+        return `<li class="${cls(k)} ${a && plan && a > plan ? 'slow' : ''}" data-code="${esc(t.taskCode)}"><span class="num">${x.done[k] ? '✓' : k + 1}</span><b>${esc(shortT(sp.arrival))}</b>
+          <span class="nm">${esc(sp.name)}</span>${act}
+          <div class="stip"><b>แผนที่จุดที่ ${k + 1} :</b>${mapHtml(sp.map)}<b style="margin-top:.4em">ชื่อ-เบอร์โทรผู้รับ จุดที่ ${k + 1} :</b>${esc(sp.receiver || '-')}</div></li>`;
+      }).join('') + (x.rt ? `<li class="${cls(x.ns)}" data-code="${esc(t.taskCode)}"><span class="num">${x.done[x.ns] ? '✓' : '↩'}</span><b></b>
+          <span class="nm">กลับ ${esc(CFG.ORIGIN || 'ต้นทาง')} (ไป-กลับ)</span>${x.done[x.ns] ? `<span class="act">ถึง ${hhmm(x.done[x.ns])}</span>` : ''}</li>` : '');
+      const chips = [t.taskCode, t.client, t.round, t.vehicleType, t.plate].filter(Boolean).map(c => `<span class="chip">${esc(c)}</span>`).join('');
+      const flagTxt = showCx ? 'CANCELED' : x.flag === 'delay' ? 'DELAY' : x.flag === 'follow' ? 'FOLLOW' : '';
+      // รถยังอยู่ใกล้จุดเริ่มต้น: รวมสถานะไว้บรรทัดเดียวกับ "รถเข้า" เพื่อไม่ให้ข้อความซ้อนกัน
+      const stat = `${x.label}${x.when ? ' ' + hhmm(x.when) : ''}`, near = x.s !== 'waiting' && x.p < .3;
+      return `<article class="row s-${x.s} ${showCx ? 'cx' : ''} ${x.flag ? 'flag ' + (x.flag === 'delay' ? 'late' : 'follow') : ''} ${x.checkin ? 'in' : ''} ${i >= 3 ? 'up' : ''} ${side}" style="--p:${x.p}">
+        <div class="pick"><div class="time">${esc(shortT(t.pickup))}<span>${esc(CFG.ORIGIN || '')}</span></div>${chips}</div>
+        <div class="track"><div class="line"></div>${dots}
+          <div class="origin">${x.checkin ? 'รถเข้า ' + hhmm(x.checkin) : 'รถยังไม่เข้า'}${near ? ` <b>· ${stat}</b>` : ''}</div>
+          <div class="mover" data-flag="${flagTxt}">
+            <button class="truck" data-code="${esc(t.taskCode)}" aria-label="ดูรายละเอียด ${esc(t.taskCode)} ${x.label} ${flagTxt}">
+              <svg><use href="#${iconOf(t)}"/></svg>${x.bubble ? '<svg class="bubble"><use href="#i-bubble"/></svg>' : ''}</button>
+            ${x.s === 'waiting' || near ? '' : `<div class="stat">${stat}</div>`}
+            <div class="tip">${tipHtml(t, x)}</div>
+          </div></div>
+        <div class="arr"><ol class="stops">${list}</ol></div>
+      </article>`;
+    }).join('');
+  }
+
+  $('pager').innerHTML = pages > 1
+    ? `<button id="prev" aria-label="หน้าก่อน">‹</button><div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === page ? 'on' : ''}"></i>`).join('')}</div>
+       <span>หน้า ${page + 1}/${pages}</span><button id="next" aria-label="หน้าถัดไป">›</button>` : '';
+  if (pages > 1) {
+    $('prev').onclick = () => turn(-1);
+    $('next').onclick = () => turn(1);
+  }
+}
+
+const mapHtml = m => !m ? '-' : /^https?:\/\//i.test(m) ? `<a href="${esc(m)}" target="_blank" rel="noopener">${esc(m)}</a>` : esc(m);
+const flagColor = x => x.flag === 'delay' ? 'late' : x.flag === 'follow' ? 'follow' : x.s;
+
+function tipHtml(t, x) {
+  return `<div><b>รถขนส่ง :</b> ${esc(t.transport || '-')}</div>
+    <div><b>ชื่อบริษัทขนส่ง :</b> ${esc(t.company || '-')}</div>
+    <div><b>ประเภทรถ / ทะเบียน :</b> ${esc(t.vehicleType || '-')} / ${esc(t.plate || '-')}</div>
+    <div><b>ชื่อผู้ขับ :</b> ${esc(t.driver || '-')}</div>
+    <div><b>เบอร์โทรผู้ขับ :</b> ${esc(t.phone || '-')}</div>
+    ${x.flag ? `<div style="color:var(--${flagColor(x)});font-weight:600">${esc(x.why)}</div>` : ''}
+    <em>คลิกที่รถเพื่อดูรูป หมายเหตุ และแก้ไขข้อมูล</em>`;
+}
+
+function turn(step) {
+  const pages = Math.max(1, Math.ceil(visible().length / PER));
+  page = (page + step + pages) % pages;
+  render();
+}
+
+/* ---------- รายละเอียด ---------- */
+// รูปอยู่ในที่เก็บรูปแบบไม่เปิดสาธารณะ : ขอลิงก์ชั่วคราว (1 ชม.) แล้วจึงแสดง จำลิงก์ไว้ 50 นาทีเพื่อไม่ต้องขอซ้ำทุกครั้งที่หน้าจออัปเดต
+const photoUrl = new Map();
+const thumbs = ids => ids && ids.length ? `<div class="thumbs">${ids.map(id => { const u = photoUrl.get(id);
+  return `<a data-p="${esc(id)}" ${u ? `href="${esc(u.url)}"` : ''} target="_blank" rel="noopener"><img loading="lazy" alt="รูป" ${u ? `src="${esc(u.url)}"` : ''}></a>`; }).join('')}</div>` : '';
+async function fillPhotos() {
+  const now = Date.now();
+  photoUrl.forEach((v, k) => { if (now - v.at > 50 * 60e3) photoUrl.delete(k); });
+  const need = [...$('dlgBody').querySelectorAll('a[data-p]:not([href])')].map(a => a.dataset.p);
+  if (!need.length) return;
+  try {
+    const got = await Auth.signUrls(need);
+    Object.keys(got).forEach(k => photoUrl.set(k, { url: got[k], at: Date.now() }));
+    $('dlgBody').querySelectorAll('a[data-p]:not([href])').forEach(a => { const u = photoUrl.get(a.dataset.p); if (u) { a.href = u.url; a.firstElementChild.src = u.url; } });
+  } catch (e) { }
+}
+const TYPE = { checkin: 'เช็คอิน', eta: 'เวลาที่คาดว่าจะถึง', road: 'สถานการณ์บนถนน', arrive: 'ถึงหน้างาน', unload: 'ลงงานเสร็จ', 'return': 'กลับถึง SCM' };
+
+function openDetail(code) {
+  const t = tasks.find(x => x.taskCode === code);
+  if (!t) return;
+  openCode = code; editing = false;
+  const x = state(t);
+  $('dlgTitle').textContent = t.taskCode;
+  disarm();
+  const cx = !!t.canceled;                         // งานที่ยกเลิกแล้ว: แก้ไขและลบไม่ได้ (admin กู้คืนได้)
+  $('actMsg').textContent = '';
+  $('dlgEdit').hidden = !Auth.canEdit();          // ผู้ใช้สิทธิ์ viewer ดูได้อย่างเดียว
+  $('dlgEdit').disabled = cx; $('dlgEdit').title = cx ? 'งานนี้ถูกยกเลิกแล้ว แก้ไขไม่ได้' : '';
+  $('dlgCancel').hidden = !Auth.isAdmin(); $('dlgCancel').textContent = cx ? 'กู้คืนงาน' : 'ยกเลิกงาน';
+  $('dlgDel').hidden = !Auth.isAdmin(); $('dlgDel').disabled = cx; $('dlgDel').title = cx ? 'งานนี้ถูกยกเลิกแล้ว ลบไม่ได้ (กดกู้คืนงานก่อน)' : '';
+  let h = `<p><span class="badge" style="--c:var(--${flagColor(x)})">${x.label}${x.flag ? ' · ' + (x.flag === 'delay' ? 'Delay' : 'Follow') : ''}</span>
+      ${x.flag ? `<span style="color:var(--${flagColor(x)})"> ${esc(x.why)}</span>` : ''}</p>
+    <dl class="kv">
+      <dt>Detail</dt><dd>${esc(t.detail || '-')}</dd>
+      <dt>Client</dt><dd>${esc(t.client || '-')}</dd>
+      <dt>ตารางเวลา</dt><dd>${esc(t.pickup || '-')} น. · ${esc(t.round || '-')}</dd>
+      <dt>เช็คอิน</dt><dd>${x.checkin ? `<span style="color:var(--arrived)">รถเข้า ${hhmm(x.checkin)} น.</span> · ทะเบียน ${esc(x.plate || '-')}` : 'รถยังไม่เข้า'}</dd>
+      ${t.stops.map((sp, k) => `<dt>จุดส่ง ${k + 1}</dt><dd>${esc(sp.arrival || '-')} น. · ${esc(sp.name)}
+        ${x.done[k] ? `<span style="color:var(--arrived)"> ✓ ลงงานเสร็จ ${hhmm(x.done[k])}</span>` : x.arrive[k] ? `<span style="color:var(--road)"> ถึงหน้างาน ${hhmm(x.arrive[k])}</span>`
+          : `${x.eta[k] ? `<span style="color:var(--departed)"> คาดว่าจะถึง ${esc(x.eta[k])}</span>` : ''}${x.over[k] ? '<span style="color:var(--late)"> เลยเวลา</span>' : ''}`}
+        <br><span style="color:var(--muted)">แผนที่:</span> ${mapHtml(sp.map)} <span style="color:var(--muted)">· ผู้รับ:</span> ${esc(sp.receiver || '-')}</dd>`).join('')}
+      ${x.rt ? `<dt>กลับ ${esc(CFG.ORIGIN || 'ต้นทาง')}</dt><dd>${x.done[x.ns] ? `<span style="color:var(--arrived)">✓ กลับถึงแล้ว ${hhmm(x.done[x.ns])}</span>` : 'ยังไม่กลับถึง (รอบไป-กลับ)'}</dd>` : ''}
+      <dt>รถขนส่ง</dt><dd>${esc(t.transport || '-')}</dd><dt>บริษัทขนส่ง</dt><dd>${esc(t.company || '-')}</dd>
+      <dt>ประเภทรถ</dt><dd>${esc(t.vehicleType || '-')}</dd><dt>ทะเบียนรถ</dt><dd>${esc(t.plate || '-')}</dd>
+      <dt>ผู้ขับ</dt><dd>${esc(t.driver || '-')}</dd>
+      <dt>เบอร์โทร</dt><dd>${t.phone ? `<a style="color:var(--departed)" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : '-'}</dd>
+    </dl>`;
+  h += `<div class="log"><h3>อัปโหลดรูปส่งงาน</h3>`;
+  h += t.pickupLog ? `<div class="t">${hhmm(t.pickupLog.time)} น.</div>${t.pickupLog.note ? `<p>${esc(t.pickupLog.note)}</p>` : ''}${thumbs(t.pickupLog.photos)}`
+                   : `<div class="t">ยังไม่มีข้อมูล</div>`;
+  h += `</div><div class="log"><h3>ข้อมูลจากผู้จัดส่ง</h3>`;
+  if (!(t.logs || []).length) h += `<div class="t">ยังไม่มีข้อมูล</div>`;
+  (t.logs || []).slice().reverse().forEach(l => {
+    const eta = (l.eta || []).map((v, i) => v ? `จุด ${i + 1} ${v}` : '').filter(Boolean).join(', ');
+    h += `<div style="margin-bottom:.9em"><div class="t">${hhmm(l.time)} น. <span class="badge" style="--c:var(--${l.type === 'unload' || l.type === 'return' ? 'arrived' : l.type === 'checkin' ? 'departed' : 'road'})">${TYPE[l.type] || ''}${l.stop ? ' จุดที่ ' + l.stop : ''}</span>
+        ${l.finish ? '<span class="badge" style="--c:var(--arrived)">จบงาน</span>' : ''}</div>
+      ${l.type === 'checkin' ? `<p>ทะเบียน ${esc(l.plate)}${l.oldPlate ? ` (แก้จาก ${esc(l.oldPlate)})` : ''}</p>` : ''}
+      ${eta ? `<p>คาดว่าจะถึง: ${esc(eta)}</p>` : ''}${l.note ? `<p>${esc(l.note)}</p>` : ''}${thumbs(l.road)}${thumbs(l.unload)}</div>`;
+  });
+  h += `</div>`;
+  $('dlgBody').innerHTML = h;
+  fillPhotos();
+  if (!$('dlg').open) $('dlg').showModal();
+}
+
+/* ---------- แก้ไขข้อมูลใน Popup แล้วบันทึกกลับชีต Plan (ประวัติการแก้อยู่ในชีต Edit_Log) ---------- */
+function openEdit() {
+  const t = tasks.find(x => x.taskCode === openCode);
+  if (!t) return;
+  editing = true; $('dlgEdit').hidden = true; $('dlgCancel').hidden = true; $('dlgDel').hidden = true;
+  const slot = k => t.stops.find(sp => sp.slot === k) || {};
+  const f = (key, label, val, type, wide) => `<label class="${wide ? 'wide' : ''}">${label}<input name="${key}" type="${type || 'text'}" value="${esc(val || '')}" data-old="${esc(val || '')}"></label>`;
+  let h = `<form class="ef" id="editForm">
+    ${f('detail', 'Detail', t.detail, 'text', true)}${f('client', 'Client Name', t.client)}${f('round', 'รอบขนส่ง', t.round)}
+    ${f('pickup', 'ตารางเวลา (Schedule)', t.pickup, 'time')}${f('transport', 'Transport', t.transport)}
+    ${f('company', 'ชื่อบริษัทขนส่ง', t.company)}${f('vehicleType', 'ประเภทรถ', t.vehicleType)}
+    ${f('plate', 'ทะเบียนรถ (เช่น 3 ฒผ 2186)', t.plate)}${f('driver', 'ชื่อผู้ขับ', t.driver)}${f('phone', 'เบอร์โทรผู้ขับ', t.phone)}`;
+  [1, 2, 3].forEach(k => {
+    const sp = slot(k);
+    h += `<h3>จุดที่ ${k}</h3>${f('stop' + k, 'ชื่อจุดส่ง', sp.name, 'text', true)}${f('arr' + k, 'เวลาถึง (Arrival Time ' + k + ')', sp.arrival, 'time')}
+      ${f('rec' + k, 'ชื่อ-เบอร์โทรผู้รับ', sp.receiver)}${f('map' + k, 'แผนที่ (ลิงก์)', sp.map, 'text', true)}`;
+  });
+  h += `</form><div class="emsg" id="editMsg" role="alert"></div>
+    <div class="eb"><button type="button" id="editCancel">ยกเลิก</button><button type="button" class="pri" id="editSave">บันทึก</button></div>`;
+  $('dlgBody').innerHTML = h;
+  $('editCancel').onclick = () => openDetail(openCode);
+  $('editSave').onclick = saveEdit;
+}
+
+/* ปุ่มที่ต้องกดซ้ำเพื่อยืนยัน (ยกเลิกงาน / ลบงาน) : กดครั้งแรกขอยืนยัน กดซ้ำภายใน 6 วินาทีจึงทำงาน */
+let armBtn = null, armT = 0;
+function disarm() { clearTimeout(armT); if (armBtn) { armBtn.textContent = armBtn.dataset.t; armBtn.style.color = ''; armBtn = null; } }
+function confirmTwice(btn, ask, run) {
+  if (armBtn !== btn) { disarm(); armBtn = btn; btn.dataset.t = btn.textContent; btn.textContent = ask; btn.style.color = '#ff8a98'; armT = setTimeout(disarm, 6000); return; }
+  disarm(); run();
+}
+const actErr = e => e.message === 'FORBIDDEN' ? 'เฉพาะผู้ดูแล (admin) เท่านั้น' : e.message === 'CANCELED' ? 'งานนี้ถูกยกเลิกแล้ว แก้ไขและลบไม่ได้ (กดกู้คืนงานก่อน)' : e.message;
+
+/* ยกเลิกงาน / กู้คืนงาน (เฉพาะ admin) : ตั้ง Task Status = Canceled งานจะหายจากแผน ไปอยู่หน้ารายการยกเลิก */
+$('dlgCancel').onclick = () => {
+  const t = tasks.find(x => x.taskCode === openCode); if (!t) return;
+  const code = t.taskCode, back = !!t.canceled;
+  confirmTwice($('dlgCancel'), back ? 'กดอีกครั้งเพื่อกู้คืนงาน' : 'กดอีกครั้งเพื่อยืนยันยกเลิกงาน', async () => {
+    if (DEMO) { $('actMsg').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ต่อกับฐานข้อมูล'; return; }
+    $('actMsg').textContent = 'กำลังบันทึก…'; $('dlgCancel').disabled = true;
+    try {
+      await Auth.rpc('plan_cancel', { p_code: code, p_cancel: !back });
+      $('dlg').close(); $('updated').textContent = (back ? 'กู้คืนงาน ' : 'ยกเลิกงาน ') + code + ' แล้ว';
+      tasks = tasks.filter(x => x.taskCode !== code); render(); load();
+    } catch (e) { $('actMsg').textContent = (back ? 'กู้คืนไม่สำเร็จ: ' : 'ยกเลิกไม่สำเร็จ: ') + actErr(e); }
+    finally { $('dlgCancel').disabled = false; }
+  });
+};
+
+/* ลบงาน (เฉพาะ admin) : ลบแผน + Log + รูปของงานนั้น (กู้คืนไม่ได้) งานที่ยกเลิกแล้วลบไม่ได้ */
+$('dlgDel').onclick = () => {
+  const t = tasks.find(x => x.taskCode === openCode); if (!t || t.canceled) return;
+  const code = t.taskCode;
+  confirmTwice($('dlgDel'), 'กดอีกครั้งเพื่อยืนยันลบ (กู้คืนไม่ได้)', async () => {
+    if (DEMO) { $('actMsg').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ต่อกับฐานข้อมูล จึงลบไม่ได้'; return; }
+    $('actMsg').textContent = 'กำลังลบ…'; $('dlgDel').disabled = true;
+    try {
+      const r = await Auth.rpc('plan_delete', { p_code: code });
+      let note = '';
+      try { await Auth.removePhotos((r && r.photos) || []); } catch (e) { note = ' (ลบรูปในที่เก็บรูปไม่สำเร็จ กรุณาลบเองที่ Supabase > Storage)'; }
+      tasks = tasks.filter(x => x.taskCode !== code);
+      $('dlg').close(); render();
+      $('updated').textContent = 'ลบงาน ' + code + ' แล้ว' + note;
+      load();
+    } catch (e) { $('actMsg').textContent = 'ลบไม่สำเร็จ: ' + actErr(e); $('dlgDel').disabled = false; }
+  });
+};
+
+async function saveEdit() {
+  const changes = {};
+  $('editForm').querySelectorAll('input').forEach(i => { if (i.value.trim() !== i.dataset.old) changes[i.name] = i.value.trim(); });
+  if (!Object.keys(changes).length) return openDetail(openCode);
+  if (DEMO) { $('editMsg').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ต่อกับฐานข้อมูล จึงบันทึกไม่ได้'; return; }
+  $('editSave').disabled = true; $('editMsg').textContent = 'กำลังบันทึก…';
+  try {
+    const r = await Auth.postJson({ action: 'editPlan', taskCode: openCode, changes });
+    if (!r.ok) throw new Error(r.error === 'FORBIDDEN' ? 'ผู้ใช้นี้ไม่มีสิทธิ์แก้ไข (ดูได้อย่างเดียว)' : r.error === 'CANCELED' ? 'งานนี้ถูกยกเลิกแล้ว แก้ไขไม่ได้' : r.error);
+    const i = tasks.findIndex(x => x.taskCode === openCode);
+    if (i >= 0) tasks[i] = r.task;
+    render(); openDetail(openCode);
+  } catch (e) {
+    $('editMsg').textContent = 'บันทึกไม่สำเร็จ: ' + e.message;
+  } finally { if ($('editSave')) $('editSave').disabled = false; }
+}
+
+$('rows').addEventListener('click', e => {
+  if (e.target.closest('.stip')) return;                       // คลิกลิงก์แผนที่ในกล่องข้อมูลจุดส่ง
+  const b = e.target.closest('.truck, .stops li');
+  if (b) openDetail(b.dataset.code);
+});
+$('q').addEventListener('input', () => {
+  terms = $('q').value.split(/[,;\n]+/).map(norm).filter(Boolean);
+  $('qClear').hidden = !$('q').value; page = 0; render();
+});
+$('qClear').onclick = () => { $('q').value = ''; $('q').dispatchEvent(new Event('input')); $('q').focus(); };
+$('dlgEdit').onclick = openEdit;
+$('dlgClose').onclick = () => $('dlg').close();
+$('dlg').addEventListener('close', () => { editing = false; openCode = null; disarm(); });
+$('dlg').addEventListener('click', e => { if (e.target === $('dlg') && !editing) $('dlg').close(); });
+
+/* ---------- นาฬิกา / รอบการทำงาน ---------- */
+function tick() { $('clock').textContent = 'เวลา ' + hhmm(now()).replace(':', '.') + ' น.'; }
+DateBox.attach($('datepick'));
+$('datepick').onchange = e => { pickedDate = e.target.value || null; page = 0; load(); };
+if (DEMO) { $('banner').hidden = false; $('banner').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js (จำลองเวลา 10.15 น. วันที่ 03-10-2026)'; pickedDate = pickedDate || '2026-10-03'; }
+tick(); load();
+const setSf = f => { sf = (f === sf ? '' : f); page = 0; render(); };       // กดซ้ำปุ่มเดิม = ยกเลิกตัวกรอง
+$('summary').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) setSf(b.dataset.f); });
+$('summary').addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const b = e.target.closest('[data-f]'); if (b) { e.preventDefault(); setSf(b.dataset.f); } });
+setInterval(tick, 10e3);
+setInterval(() => { if (!$('dlg').open) render(); }, 30e3);                       // คำนวณ Delay / Follow ใหม่ตามเวลา
+setInterval(load, (CFG.REFRESH_SEC || 60) * 1e3);
+setInterval(() => { if (!$('dlg').open) turn(1); }, (CFG.ROTATE_SEC || 90) * 1e3);
+
+/* ---------- ข้อมูลตัวอย่าง (จาก Delivery_Plan.xlsx ชีต Plan) ---------- */
+function demoTasks() {
+  const P = 'บริษัท ปทุม ทรานสปอร์ต จำกัด', DT = '2026-10-03', T = h => h ? `${DT}T${h}:00+07:00` : '';
+  const S = (...a) => a.map(([name, arrival, map, receiver], i) => ({ slot: i + 1, name, arrival, map: map || '', receiver: receiver || '' }));
+  const Z = (ci, plate, depart, arrive, done, eta, lastRoad, roadCount) => ({ returned: '', checkin: ci ? { time: T(ci), plate } : null, depart: T(depart),
+    arrive: arrive.map(T), done: done.map(T), eta, lastRoad: T(lastRoad), roadCount });
+  const base = { date: DT, pickupLog: null, logs: [] };
+  return [
+    { ...base, taskCode:'D20261003-01', detail:'7-11 พหลโยธิน 55/2 วงเวียนขางเขน,7-11 ลำลูกกา 36', client:'LN26-552', transport:'min : 4W 1.85 x 3.43 x 1.89 mm 2ฒผ-2186 (07.50 น ต้องปล่อยรถ)', pickup:'07:30',
+      company:P, vehicleType:'4ล้อเทลเกต(จัมโบ้)', plate:'3 ฒผ 2186', driver:'กิตติศักดิ์ มะลิเลย', phone:'092-8322384', round:'รอบเดียว',
+      stops:S(['7-11 พหลโยธิน 55/2 วงเวียนขางเขน #24145','09:00','','ติดต่อ 091-876-6497 คุณจ๋า'],['7-11 ลำลูกกา 36 #24267','10:00','','โปรดดูข้อมูลในใบแพลน'],['7-11 ลำลูกกา 51','10:30']),
+      state:Z('07:10','3 ฒผ 2186','07:45',['09:05','',''],['09:25','',''],['','10:25','10:55'],'09:40',2) },
+    { ...base, taskCode:'D20261003-02', detail:'KWANPO1047,7-11 บางกร่าง 47', client:'LN26-550', transport:'min : 4W 1.84 x 3.12 x 2 m 4ฒญ-3596', pickup:'08:00',
+      company:P, vehicleType:'4ล้อเทลเกต(จัมโบ้)', plate:'4 ฒญ 3596', driver:'อนุพงษ์ สรงเนย', phone:'080-0433953', round:'ไป-กลับ', roundTrip:true,
+      stops:S(['ห้างหุ้นส่วนจำกัด กว้างไกล เอ็นจิเนียริ่ง เขตบางขุนเทียน กทม.','10:00','https://maps.app.goo.gl/d2vw7i1Upu5TCz556','ติดต่อ 089-811-9080 คุณนันทภพ'],['7-11 บางกร่าง 47 #24288','11:00','','โปรดดูข้อมูลในใบแพลน']),
+      state:Z('07:40','4 ฒญ 3596','08:05',['09:35','10:08'],['09:50','10:12'],['',''],'08:55',1) },
+    { ...base, taskCode:'D20261003-03', detail:'SYSTPO1036', client:'LN26-547', transport:'min : 4W 1.66 x 2.49 x 1.96 m 3 ฒฒ 2192', pickup:'08:30',
+      company:P, vehicleType:'4ล้อเทลเกต(คาร์โก้)', plate:'3 ฒฒ 2192', driver:'สายชล พวงรัตน์', phone:'095-2688556', round:'รอบเดียว',
+      stops:S(['บริษัท ซิสเต็มฟอร์ม จำกัด อ.เมือง จ.ฉะเชิงเทรา','10:30','https://maps.app.goo.gl/X4rE5eXjKqh6xHNq8','ติดต่อ รปภ. หน้าโกดัง']),
+      state:Z('08:10','3 ฒฒ 2192','08:35',[''],[''],[''],'',0) },
+    { ...base, taskCode:'D20261003-04', detail:'UTAIPO1206', client:'LN26-', transport:'Lalamove', pickup:'09:00', company:'Lalamove', vehicleType:'', plate:'', driver:'', phone:'', round:'รอบเดียว',
+      stops:S(['UTAIPO1206','11:00']), state:Z('09:15','1 กข 1234','09:40',[''],[''],['10:50'],'10:05',1) },
+    { ...base, taskCode:'D20261003-05', detail:'SANDPO1199', client:'LN26-', transport:'Lalamove 6 ขล 5650', pickup:'10:00', company:'Lalamove', vehicleType:'', plate:'6 ขล 5650', driver:'', phone:'', round:'รอบเดียว',
+      stops:S(['SANDPO1199','12:00']), state:Z('09:55','6 ขล 5650','',[''],[''],[''],'',0) },
+    { ...base, taskCode:'D20261003-06', detail:'งานเคลมสำหรับลูกค้า System Form', client:'', transport:'Lalamove', pickup:'11:00', company:'Lalamove', vehicleType:'', plate:'', driver:'', phone:'', round:'รอบเดียว',
+      stops:S(['งานเคลมสำหรับลูกค้า System Form','13:00']), state:Z('','','',[''],[''],[''],'',0) }
+  ];
+}
+</script>
+</body>
+</html>
