@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>ตั้งค่า ETA - Delivery Plan</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1120;--panel:#131c2e;--panel2:#1a2540;--rule:#26324d;--text:#eaf0fa;--muted:#8e9bb3;--blue:#4aa8ff;--amber:#f6b93b;--green:#34d08c;--red:#ff4d61}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px clamp(16px,2.2vw,44px);background:linear-gradient(180deg,#1b2742,#141d31);border-bottom:1px solid var(--rule)}
+h1{margin:0;font-size:clamp(20px,2.2vw,32px)} h2{font-size:1.15em;margin:1.4em 0 .4em}
+.right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.9em;color:var(--muted)}
+a.nav,button{font:inherit;color:var(--text);cursor:pointer;background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:.3em .9em;text-decoration:none}
+a.nav:hover,button:hover,a.nav:focus-visible,button:focus-visible{border-color:var(--blue);outline:none}
+button.primary{background:var(--blue);color:#06101f;border-color:var(--blue);font-weight:700}
+button:disabled{opacity:.45;cursor:not-allowed}
+main{padding:8px clamp(16px,2.2vw,44px) 40px;max-width:1100px;margin:0 auto}
+input{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:.25em .6em;min-width:0}
+input:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+table{border-collapse:collapse;width:100%;font-size:.92em}
+th,td{padding:.35em .6em;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle}
+th{background:var(--panel2);font-weight:600}
+td.note{color:var(--muted);font-size:.9em}
+td input.v{width:7em}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:.5em 0}
+.row input.n{flex:1 1 14em}.row input.c{flex:2 1 18em}.row input.r{width:6em}
+#msg{font-weight:600;min-height:1.5em;margin-top:.8em}
+#msg.ok{color:var(--green)}#msg.err{color:var(--red)}
+.muted{color:var(--muted)} .tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags button{font-size:.88em}
+.scroll{overflow:auto;border:1px solid var(--rule);border-radius:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>ตั้งค่า ETA / GPS</h1>
+  <div class="right"><a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">Dashboard วันนี้</a><span id="userBox"></span></div>
+</header>
+<main>
+  <div id="msg"></div>
+
+  <h2>1) พิกัดจุดส่ง</h2>
+  <p class="muted">ชื่อต้องตรงกับช่อง “จุดที่ 1-3” ใน Plan (ไม่สนช่องว่าง) วางลิงก์ Google Maps แบบเต็ม หรือพิมพ์ <b>ละติจูด,ลองจิจูด</b> ก็ได้ (ลิงก์ย่อ goo.gl อ่านพิกัดไม่ได้ ให้เปิดลิงก์แล้วคัดลอกลิงก์เต็มจากแถบที่อยู่ หรือคลิกขวาที่จุดบนแผนที่แล้วคัดลอกพิกัด)</p>
+  <div id="miss" class="tags"></div>
+  <div class="row" id="addRow">
+    <input class="n" id="pn" placeholder="ชื่อจุดส่ง" aria-label="ชื่อจุดส่ง">
+    <input class="c" id="pc" placeholder="13.7563,100.5018 หรือลิงก์ Google Maps แบบเต็ม" aria-label="พิกัด">
+    <input class="r" id="pr" type="number" min="20" max="5000" value="200" aria-label="รัศมีเมตร" title="รัศมีเมตร">
+    <button class="primary" id="padd">บันทึกพิกัด</button>
+  </div>
+  <div class="scroll"><table><thead><tr><th>ชื่อจุดส่ง</th><th>ละติจูด</th><th>ลองจิจูด</th><th>รัศมี (ม.)</th><th></th></tr></thead><tbody id="pl"></tbody></table></div>
+
+  <h2>2) ค่าตั้งของ ETA และ GPS</h2>
+  <p class="muted" id="cfgHint"></p>
+  <div class="scroll"><table><thead><tr><th>ค่า</th><th>ความหมาย</th><th>ค่าที่ตั้ง</th><th></th></tr></thead><tbody id="cf"></tbody></table></div>
+
+  <h2>3) ตำแหน่งรถล่าสุดที่ได้รับ</h2>
+  <div class="scroll"><table><thead><tr><th>ทะเบียน</th><th>เวลากล่อง GPS</th><th>ความเร็ว</th><th>สถานะ</th><th>พิกัด</th></tr></thead><tbody id="gp"></tbody></table></div>
+</main>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const say = (t, k) => { $('msg').textContent = t; $('msg').className = k || ''; };
+const NAME = { buffer_ok_min: 'ทันเวลา (นาที)', late_tol_min: 'เสี่ยงสาย (นาที)', detour_factor: 'ตัวคูณทางอ้อม', default_speed_kmh: 'ความเร็วเริ่มต้น', use_recent_speed: 'ใช้ความเร็วล่าสุด',
+  recent_window_min: 'ช่วงหาความเร็ว', stale_gps_min: 'GPS เก่าเกิน', stop_radius_m: 'รัศมีจุดส่ง', unload_min: 'เวลาลงของ', origin_lat: 'ต้นทาง ละติจูด', origin_lng: 'ต้นทาง ลองจิจูด',
+  origin_radius_m: 'รัศมีต้นทาง', auto_events: 'GPS บันทึกสถานะเอง', arrive_max_speed: 'ความเร็วสูงสุดตอนถึงจุด' };
+let admin = false, edit = false;
+
+function parseCoord(t) {
+  t = String(t || '');
+  let m = t.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/) || t.match(/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/);
+  if (!m) return null;
+  const la = +m[1], lo = +m[2];
+  return la >= -90 && la <= 90 && lo >= -180 && lo <= 180 ? [la, lo] : null;
+}
+async function run(fn) { try { await fn(); } catch (e) { say(e.message || String(e), 'err'); } }
+
+async function load() {
+  const [st, miss, gps] = await Promise.all([Auth.rpc('eta_settings'), Auth.rpc('places_missing'), Auth.rpc('gps_list')]);
+  $('miss').innerHTML = miss.length ? '<span class="muted">จุดส่งที่ยังไม่มีพิกัด (7 วันล่าสุด) กดเพื่อเติมชื่อ :</span> ' + miss.map(n => `<button type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('') : '<span class="muted">จุดส่งในแผน 7 วันล่าสุดมีพิกัดครบแล้ว</span>';
+  $('miss').querySelectorAll('button').forEach(b => b.onclick = () => { $('pn').value = b.dataset.n; $('pc').focus(); });
+  $('pl').innerHTML = st.places.map(p => `<tr><td>${esc(p.name)}</td><td>${p.lat}</td><td>${p.lng}</td><td>${p.radius}</td>
+    <td>${edit ? `<button data-e="${esc(p.name)}">แก้</button> <button data-d="${esc(p.name)}">ลบ</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">ยังไม่มีพิกัด</td></tr>';
+  $('pl').querySelectorAll('[data-d]').forEach(b => b.onclick = () => run(async () => {
+    if (!confirm('ลบพิกัดของ ' + b.dataset.d + ' ?')) return;
+    await Auth.rpc('places_delete', { p_name: b.dataset.d }); say('ลบแล้ว', 'ok'); load();
+  }));
+  $('pl').querySelectorAll('[data-e]').forEach(b => b.onclick = () => {
+    const p = st.places.find(x => x.name === b.dataset.e); if (!p) return;
+    $('pn').value = p.name; $('pc').value = p.lat + ',' + p.lng; $('pr').value = p.radius; $('pc').focus();
+  });
+  const ORD = Object.keys(NAME), ix = k => { const i = ORD.indexOf(k); return i < 0 ? 99 : i; };
+  $('cf').innerHTML = st.config.slice().sort((a, b) => ix(a.key) - ix(b.key)).map(c => `<tr><td>${esc(NAME[c.key] || c.key)}<br><span class="muted" style="font-size:.8em">${esc(c.key)}</span></td><td class="note">${esc(c.note)}</td>
+    <td><input class="v" data-k="${esc(c.key)}" value="${esc(c.value)}" ${admin ? '' : 'disabled'}></td><td>${admin ? `<button data-s="${esc(c.key)}">บันทึก</button>` : ''}</td></tr>`).join('');
+  $('cf').querySelectorAll('[data-s]').forEach(b => b.onclick = () => run(async () => {
+    const v = $('cf').querySelector(`input[data-k="${b.dataset.s}"]`).value;
+    await Auth.rpc('eta_config_set', { p_key: b.dataset.s, p_value: v }); say('บันทึกค่า ' + b.dataset.s + ' แล้ว', 'ok');
+  }));
+  $('cfgHint').textContent = admin ? 'แก้ค่าแล้วกด “บันทึก” ที่แถวนั้น มีผลกับ ETA ทันทีในการโหลดครั้งถัดไป' : 'ดูได้อย่างเดียว (เฉพาะ admin แก้ค่าได้)';
+  $('gp').innerHTML = gps.map(g => `<tr><td>${esc(g.plate)}</td><td>${esc(g.time)}</td><td>${g.speed}</td><td>${esc(g.status)}</td><td><a class="nav" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${g.lat},${g.lng}">${(+g.lat).toFixed(5)}, ${(+g.lng).toFixed(5)}</a></td></tr>`).join('') || '<tr><td colspan="5" class="muted">ยังไม่มีข้อมูล GPS (ส่งจาก Excel ด้วยปุ่ม ส่ง GPS)</td></tr>';
+}
+
+$('padd').onclick = () => run(async () => {
+  const name = $('pn').value.trim(), c = parseCoord($('pc').value);
+  if (!name) return say('ใส่ชื่อจุดส่ง', 'err');
+  if (!c) return say('อ่านพิกัดไม่ได้ ใส่เป็น ละติจูด,ลองจิจูด เช่น 13.7563,100.5018 หรือลิงก์ Google Maps แบบเต็ม', 'err');
+  await Auth.rpc('places_set', { p_name: name, p_lat: c[0], p_lng: c[1], p_radius: +$('pr').value || 200 });
+  say('บันทึกพิกัด ' + name + ' แล้ว', 'ok'); $('pn').value = ''; $('pc').value = ''; load();
+});
+
+(async () => {
+  if (!SB.ON) return say('โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js', 'err');
+  if (!Auth.get()) await Auth.login();
+  Auth.badge($('userBox'));
+  admin = Auth.isAdmin(); edit = Auth.canEdit();
+  $('addRow').hidden = !edit;
+  run(load);
+})();
+</script>
+</body>
+</html>
