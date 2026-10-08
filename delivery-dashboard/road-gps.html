@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>อัปเดตข้อมูลสำหรับผู้จัดส่ง</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>อัปเดตข้อมูลสำหรับผู้จัดส่ง</h1>
+  <p class="sub">(คนขับ / คนติดตาม) สถานะรถบันทึกจาก GPS อัตโนมัติ คนขับส่งเฉพาะสถานการณ์เมื่อออกไปแล้ว 1 ชม.</p>
+  <div id="demo" class="msg info" hidden>โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js ข้อมูลจะไม่ถูกบันทึก</div>
+  <div id="msg" class="msg err" hidden role="alert"></div>
+
+  <div class="card" id="scanCard" hidden>
+    <h2>สแกน QR ประจำงาน</h2>
+    <div id="reader" hidden></div>
+    <button class="btn primary" id="scanBtn" type="button">เปิดกล้องสแกน QR</button>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card" id="taskBox"></div>
+
+    <div class="card" id="g1">
+      <h2>สถานะรถ <small>บันทึกอัตโนมัติจาก GPS</small></h2>
+      <div id="gList"></div>
+      <div class="meter" id="gHint" style="margin-top:6px"></div>
+    </div>
+
+    <div class="card" id="s2" hidden>
+      <h2>สถานการณ์รถเมื่อออกไปแล้ว 1 ชม. <small>ส่งรูป/หมายเหตุ ส่งซ้ำได้</small></h2>
+      <div id="s2lock" class="lock" hidden></div>
+      <div id="s2body">
+        <div class="meter" id="s2time"></div>
+        <div class="lbl" style="margin-top:8px">รูปสถานการณ์บนถนน <small>สูงสุด 5 รูป รวมไม่เกิน 5 MB</small></div>
+        <div id="pkRoad"></div>
+        <label class="lbl" for="noteRoad" style="margin-top:14px">หมายเหตุ</label>
+        <textarea id="noteRoad" maxlength="2000" placeholder="เช่น รถติด ฝนตก"></textarea>
+        <button class="btn primary act" id="roadBtn" type="button" style="margin-top:12px">ส่งสถานการณ์</button>
+      </div>
+    </div>
+
+    <div class="card" id="s3" hidden>
+      <h2>แนบรูปลงงาน / รูปคืน SCM <small>ไม่บังคับ แนบได้ถึง 24 ชม. หลังถึงจุดนั้น</small></h2>
+      <label class="lbl" for="photoTarget">เลือกจุด</label>
+      <select id="photoTarget" class="inp"></select>
+      <div id="photoOpen" class="meter"></div>
+      <div class="lbl" style="margin-top:12px">รูป <small>สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></div>
+      <div id="pkUnload"></div>
+      <label class="lbl" for="noteUnload" style="margin-top:14px">หมายเหตุ</label>
+      <textarea id="noteUnload" maxlength="2000" placeholder="ถ้ามี"></textarea>
+      <button class="btn finish act" id="unloadBtn" type="button" style="margin-top:12px">ส่งรูป</button>
+    </div>
+
+    <div class="meter" style="text-align:center;margin:2px 0 14px"><a id="manualLink" href="road.html" style="color:#38bdf8">GPS ไม่ทำงาน? ใช้ฟอร์มปกติ (กรอกเอง)</a></div>
+
+    <div class="card stamp"><span>วันที่และเวลา (บันทึกอัตโนมัติ)</span><b id="stamp"></b></div>
+    <div id="sync" class="meter" hidden style="text-align:center;margin:6px 0"></div>
+    <div id="prog" hidden><div id="progText" class="meter"></div><div class="bar"><i id="progBar"></i></div></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden role="status"></div>
+<dialog id="cfDlg">
+  <p id="cfText"></p>
+  <div class="btns"><button class="btn finish" id="cfYes" type="button">ยืนยัน</button><button class="btn ghost" id="cfNo" type="button">ยกเลิก</button></div>
+</dialog>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="form.js"></script>
+<script src="driver-gps.js"></script>
+</body>
+</html>

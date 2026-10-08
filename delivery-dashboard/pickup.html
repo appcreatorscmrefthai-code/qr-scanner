@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>อัปโหลดรูปส่งงาน</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>อัปโหลดรูปส่งงาน</h1>
+  <p class="sub">ถ่ายรูปสินค้า/การบรรจุที่คลังสินค้า อัปโหลดเพิ่มได้จนครบ 24 ชม. นับจากการอัปโหลดครั้งล่าสุด (ระบบไม่บันทึกเวลารถออกจากหน้านี้)</p>
+  <div id="demo" class="msg info" hidden>โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js ข้อมูลจะไม่ถูกบันทึก</div>
+  <div id="msg" class="msg err" hidden role="alert"></div>
+
+  <div id="formBox">
+    <div class="card">
+      <h2>1. งานที่ส่ง</h2>
+      <div id="reader" hidden></div>
+      <div id="taskBox" hidden></div>
+      <div id="winInfo" class="meter" hidden></div>
+      <button class="btn primary" id="scanBtn" type="button" hidden>เปิดกล้องสแกน QR ประจำงาน</button>
+    </div>
+
+    <div class="card">
+      <h2>2. รูปส่งงาน <small>สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></h2>
+      <div id="pkPhotos"></div>
+    </div>
+
+    <div class="card">
+      <h2><label for="note">3. หมายเหตุ</label></h2>
+      <textarea id="note" maxlength="2000" placeholder="ถ้ามี"></textarea>
+    </div>
+
+    <div class="card stamp"><span>วันที่และเวลา (บันทึกอัตโนมัติ)</span><b id="stamp"></b></div>
+
+    <div class="btns"><button class="btn primary" id="sendBtn" type="button" disabled>ส่งข้อมูล</button></div>
+  </div>
+
+  <div id="doneBox" class="card done" hidden>
+    <div class="ok">✓</div><p id="doneText"></p>
+  </div>
+  <div id="prog" hidden><div id="progText" class="meter"></div><div class="bar"><i id="progBar"></i></div></div>
+</div>
+<div id="toast" class="toast" hidden role="status"></div>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="form.js"></script>
+<script>
+const { $, esc } = DF;
+let task = null, busy = false;
+const picker = DF.makePicker({ key: 'photos', kind: 'pickup', el: 'pkPhotos', max: 20, maxMB: 50, label: 'รูปส่งงาน', context: () => ({ taskCode: task && task.taskCode }) });
+
+async function load(code) {
+  if (!code) return;
+  DF.say('กำลังโหลดข้อมูลงาน…', 'info');
+  try {
+    task = (await DF.retry(() => DF.apiGet({ action: 'task', code }), 2)).task;
+    $('taskBox').hidden = false; $('taskBox').innerHTML = DF.taskCard(task);
+    $('scanBtn').hidden = true; $('sendBtn').disabled = false;
+    const last = (task.pickupRows || []).filter(r => r.source !== 'GPS').pop();
+    $('winInfo').hidden = !last;
+    if (last) {
+      const close = new Date(new Date(last.time).getTime() + 24 * 3600e3), closed = Date.now() > close.getTime();
+      $('winInfo').textContent = `อัปโหลดล่าสุด ${DF.fmt(last.time)} · ` + (closed ? 'ปิดรับรูปแล้ว (เกิน 24 ชม.)' : 'ส่งเพิ่มได้ถึง ' + DF.fmt(close.toISOString()));
+      if (closed) { $('sendBtn').disabled = true; DF.say('ปิดรับรูปจากคลังสินค้าแล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)'); return; }
+    }
+    DF.say(''); DF.warm(task.taskCode);
+  } catch (e) {
+    task = null; $('scanBtn').hidden = false; $('sendBtn').disabled = true;
+    DF.say(e.message || 'ไม่พบงานนี้');
+  }
+}
+
+$('sendBtn').onclick = async () => {
+  if (busy || !task) return;
+  DF.say('');
+  if (!picker.items.length) return DF.say('กรุณาแนบรูปส่งงานอย่างน้อย 1 รูป');
+  busy = true; $('sendBtn').disabled = true;
+  // ขึ้นหน้าสำเร็จทันที แล้วส่งข้อมูลต่อเบื้องหลัง (ถ้าส่งไม่ผ่านจะกลับมาหน้าฟอร์มพร้อมรูปเดิมให้กดส่งใหม่)
+  const head = `<b>${esc(task.taskCode)}</b><br>`, t0 = Date.now();
+  $('formBox').hidden = true; $('doneBox').hidden = false; window.scrollTo(0, 0);
+  $('doneText').innerHTML = head + 'รับข้อมูลแล้ว กำลังส่งเข้าระบบ…<br><span style="color:var(--muted)">กรุณาเปิดหน้านี้ค้างไว้สักครู่</span>';
+  try {
+    const d = await DF.submitWithPhotos({ form: 'pickup', taskCode: task.taskCode, note: $('note').value.trim() }, [picker]);
+    const when = `<br><span style="color:var(--muted)">${DF.fmt(d.time)}</span>`;
+    $('doneText').innerHTML = head + 'บันทึกแล้ว กำลังส่งรูปที่เหลือ…' + when;
+    const ph = await d.photos;
+    $('doneText').innerHTML = head + (ph.sent < ph.total ? `บันทึกแล้ว แต่มีรูป ${ph.total - ph.sent} รูปส่งไม่สำเร็จ` : 'บันทึกรูปส่งงานเรียบร้อย ปิดหน้านี้ได้') + when +
+      `<br><span style="color:var(--muted);font-size:.8em">ใช้เวลา ${((Date.now() - t0) / 1000).toFixed(1)} วินาที</span>`;
+  } catch (e) {
+    $('formBox').hidden = false; $('doneBox').hidden = true;
+    DF.say('ส่งข้อมูลไม่สำเร็จ: ' + (e.message || e) + ' กรุณากดส่งอีกครั้ง');
+  } finally {
+    busy = false; $('sendBtn').disabled = !task; $('sendBtn').textContent = 'ส่งข้อมูล';
+  }
+};
+
+$('scanBtn').onclick = () => DF.startScan(load);
+DF.clock();
+if (DF.DEMO) $('demo').hidden = false;
+if (DF.param('task')) load(DF.param('task')); else $('scanBtn').hidden = false;
+</script>
+</body>
+</html>
