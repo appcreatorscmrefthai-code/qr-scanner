@@ -38,7 +38,7 @@ window.Auth = (function () {
       d.style.cssText = 'background:#131c2e;color:#eaf0fa;border:1px solid #3a4a72;border-radius:14px;padding:22px;width:min(380px,92vw);font:16px/1.5 "Sarabun","Noto Sans Thai",Tahoma,sans-serif';
       const inp = 'width:100%;box-sizing:border-box;font:inherit;color:#eaf0fa;background:#1a2540;border:1px solid #2a3756;border-radius:10px;padding:10px 12px;margin:4px 0 12px';
       d.innerHTML = `<form method="dialog" id="authForm">
-        <h2 style="margin:0 0 4px;font-size:20px">เข้าสู่ระบบ Delivery Plan</h2>
+        <h2 style="margin:0 0 4px;font-size:20px">เข้าสู่ระบบ Delivery Tracking</h2>
         <p style="margin:0 0 14px;color:#8e9bb3;font-size:14px">${esc(note || 'ใช้ชื่อผู้ใช้ (หรืออีเมล) และรหัสผ่านที่ผู้ดูแลกำหนดให้')}</p>
         <label>ชื่อผู้ใช้หรืออีเมล<input id="authUser" autocomplete="username" autocapitalize="none" spellcheck="false" style="${inp}" required></label>
         <label>รหัสผ่าน<input id="authPass" type="password" autocomplete="current-password" style="${inp}" required></label>

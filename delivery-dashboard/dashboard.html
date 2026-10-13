@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>Delivery Plan Dashboard</title>
+<title>Dashboard - Delivery Tracking</title>
 <link rel="icon" type="image/png" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-180.png?v=2">
 <link rel="manifest" href="manifest.webmanifest">
@@ -236,7 +236,7 @@ dialog::backdrop{background:rgba(3,6,14,.72)}
 <div id="banner" class="banner" hidden></div>
 <div id="gpsWarn" class="banner bad" hidden role="alert"></div>
 <header>
-  <h1 id="title">Delivery Plan</h1>
+  <h1 id="title">Delivery Tracking</h1>
   <div class="search"><input id="q" type="search" autocomplete="off" aria-label="ค้นหางาน"
     placeholder="ค้นหา Task Code, LN Num, ทะเบียนรถ, จุดส่ง (หลายค่าคั่นด้วย , )"><button id="qClear" type="button" aria-label="ล้างคำค้นหา" hidden>×</button></div>
   <div class="right">
@@ -514,7 +514,7 @@ function render() {
   const date = pickedDate || today();
   const d = at(date, '12:00');
   const [y, m, dd] = date.split('-');
-  $('title').innerHTML = `${showCx ? 'รายการยกเลิก' : 'Delivery Plan'} ${DAYS[new Date(d.getTime() + 7 * 3600e3).getUTCDay()]} ${dd}-${m}-${y}`;
+  $('title').innerHTML = `${showCx ? 'รายการยกเลิก' : 'Delivery Tracking'} ${DAYS[new Date(d.getTime() + 7 * 3600e3).getUTCDay()]} ${dd}-${m}-${y}`;
   if ($('datepick').value !== date) $('datepick').value = date;
   DateBox.sync($('datepick'));
   $('qrLink').href = 'qr.html?date=' + date;
