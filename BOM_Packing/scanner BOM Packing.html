@@ -94,8 +94,8 @@
   <img src="icon-192.png" alt="">
   <h1>BOM Packing</h1>
   <form id="loginForm" class="card">
-    <label>ชื่อผู้ใช้
-      <input id="u" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label>อีเมล
+      <input id="u" type="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
     </label>
     <label>รหัสผ่าน
       <input id="p" type="password" autocomplete="current-password" required>
@@ -128,7 +128,6 @@
 <script>
   const SUPABASE_URL = "https://vmpcfiefryvfovqjhewy.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_ZizU3_OdW6cOrouQXo7JsA_cYCySG9H";
-  const EMAIL_DOMAIN = "@scmref.local";
 
   const $ = (id) => document.getElementById(id);
   const q = $("q"), app = $("app"), listEl = $("list"), detail = $("detail"), wrap = $("reader-wrap");
@@ -207,7 +206,7 @@
     btn.textContent = "กำลังตรวจสอบ…";
     showLoginMsg("");
     try {
-      const email = $("u").value.trim() + EMAIL_DOMAIN;
+      const email = $("u").value.trim();
       const { ok, data } = await authFetch("token?grant_type=password", { email, password: $("p").value });
       if (!ok) {
         showLoginMsg("เข้าสู่ระบบไม่ได้ (ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง)");
@@ -245,33 +244,48 @@
 
   $("logout").addEventListener("click", () => logout(""));
 
+  // ---------- โหลดข้อมูลทั้งหมดแบบแบ่งหน้า (PostgREST จำกัดสูงสุด 1000 แถว/request) ----------
+  const PAGE_SIZE = 1000;
+  async function fetchAllRows(path, headers, onUnauthorized) {
+    let out = [];
+    let from = 0;
+    for (;;) {
+      let res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+        headers: { ...headers, Range: `${from}-${from + PAGE_SIZE - 1}` },
+      });
+      if (res.status === 401) {
+        const newHeaders = await onUnauthorized();
+        if (!newHeaders) return null; // logout ไปแล้ว
+        headers = newHeaders;
+        res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+          headers: { ...headers, Range: `${from}-${from + PAGE_SIZE - 1}` },
+        });
+      }
+      if (!res.ok) throw new Error(`โหลด ${path} ไม่ได้ (HTTP ${res.status})`);
+      const rows = await res.json();
+      out = out.concat(rows);
+      if (rows.length < PAGE_SIZE) break; // หน้าสุดท้ายแล้ว
+      from += PAGE_SIZE;
+    }
+    return out;
+  }
+
   // ---------- โหลดข้อมูลทั้งหมด (จาก Supabase, ต้อง login ก่อน) ----------
   async function loadAll(attempt = 1) {
     try {
-      const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` };
-      let [fgRes, useRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/bom_packing?select=no,col_b,col_c&order=no`, { headers }),
-        fetch(`${SUPABASE_URL}/rest/v1/bom_packing_use?select=col_b,col_d,col_e,col_f,col_g&order=no`, { headers }),
+      const baseHeaders = () => ({ apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` });
+      const onUnauthorized = async () => {
+        if (!refreshToken) { logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่"); return null; }
+        await doRefresh();
+        if (!token) return null; // doRefresh ล้มเหลวและ logout ไปแล้ว
+        return baseHeaders();
+      };
+
+      const [fgRows, useRows] = await Promise.all([
+        fetchAllRows("bom_packing?select=no,col_b,col_c&order=no", baseHeaders(), onUnauthorized),
+        fetchAllRows("bom_packing_use?select=col_b,col_d,col_e,col_f,col_g&order=no", baseHeaders(), onUnauthorized),
       ]);
-
-      if (fgRes.status === 401 || useRes.status === 401) {
-        if (refreshToken) {
-          await doRefresh();
-          if (!token) return; // doRefresh ล้มเหลวและ logout ไปแล้ว
-          const headers2 = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` };
-          [fgRes, useRes] = await Promise.all([
-            fetch(`${SUPABASE_URL}/rest/v1/bom_packing?select=no,col_b,col_c&order=no`, { headers: headers2 }),
-            fetch(`${SUPABASE_URL}/rest/v1/bom_packing_use?select=col_b,col_d,col_e,col_f,col_g&order=no`, { headers: headers2 }),
-          ]);
-        } else {
-          return logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
-        }
-      }
-      if (!fgRes.ok) throw new Error("โหลด BOM_Packing ไม่ได้ (HTTP " + fgRes.status + ")");
-      if (!useRes.ok) throw new Error("โหลด BOM_Packing_Use ไม่ได้ (HTTP " + useRes.status + ")");
-
-      const fgRows = await fgRes.json();
-      const useRows = await useRes.json();
+      if (fgRows === null || useRows === null) return; // logout ไปแล้วระหว่างทาง
 
       all = fgRows.map((r) => ({ code: r.col_b, line: r.no, model: r.col_c }));
 
