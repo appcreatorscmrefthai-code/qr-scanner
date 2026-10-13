@@ -183,6 +183,14 @@ function draw() {
   $('printBtn').disabled = !tasks.length; $('printBtn').textContent = 'พิมพ์' + ({ driver: 'รายงานคนขับ', wh: 'รายงานคลังสินค้า', both: 'ทั้ง 2 รายงาน' }[k]);
 }
 window.addEventListener('beforeprint', stampPages);
+// ชื่อไฟล์ตอนบันทึกเป็น PDF = ชื่อหน้า (title) ขณะสั่งพิมพ์ : QR คนขับ / QR คลังสินค้า / QR รวม + วันที่เวลาที่พิมพ์ เช่น QR คนขับ 20261013 1551
+const baseTitle = document.title;
+function printTitle() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${{ driver: 'QR คนขับ', wh: 'QR คลังสินค้า', both: 'QR รวม' }[kind()]} ${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())} ${p(d.getHours())}${p(d.getMinutes())}`;
+}
+window.addEventListener('beforeprint', () => { document.title = printTitle(); });
+window.addEventListener('afterprint', () => { document.title = baseTitle; });
 
 async function load() {
   $('date').value = date; DateBox.sync($('date')); $('back').href = 'dashboard.html?date=' + date;
