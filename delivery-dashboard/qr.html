@@ -59,19 +59,23 @@ u{text-underline-offset:1.5pt}
 .drv-main .qrrow{display:flex;gap:4mm;align-items:flex-start}
 .help b{display:block;font-size:11pt}
 .help div{font-size:10.5pt}
-.drv-stop{flex:0 0 auto;min-height:60mm;display:grid;grid-template-columns:1fr auto;column-gap:6mm;align-content:start;padding:10mm 0}   /* เว้นระยะจากแนวตัด 1 ซม. ทั้งบนและล่าง */
-.drv-stop .name{grid-column:1 / -1;font-size:10.5pt;padding-left:12.7mm;margin-bottom:1.5mm;overflow-wrap:anywhere}
-table.docs{border-collapse:collapse;width:96mm;margin-left:15.9mm;font-size:8pt;line-height:1.2}
-table.docs th,table.docs td{border:1px solid #000;padding:0 1.5mm;height:4.6mm}
+/* ส่วนหัวข้อมูลเยอะ (จุดส่งหลายจุด/ชื่อยาว) : ย่อทีละขั้นจนพอดีชิ้นบน — fitMain() */
+.drv-main.f1 .big{font-size:13pt;line-height:1.35;margin-top:1mm}.drv-main.f1 .txt{font-size:10pt;line-height:1.4}.drv-main.f1 .stop + .stop{margin-top:1.5mm}.drv-main.f1 .role small{font-size:9pt;line-height:1.35}
+.drv-main.f2 .rv{display:none}
+.drv-main.f3 .ap br{display:none}.drv-main.f3 .txt{font-size:9.5pt}
+.drv-stop{flex:0 0 64mm;display:grid;grid-template-columns:51mm minmax(0,1fr);column-gap:11mm;align-content:start;padding:3mm 0 2mm;--r:5.4mm}   /* 3 ชิ้นล่างสูงเท่ากันเสมอ แนวตัดตรงกันทุกหน้า */
+.drv-stop .name{grid-column:1 / -1;font-size:12pt;font-weight:700;line-height:1.35;max-height:2.7em;overflow:hidden;overflow-wrap:anywhere;margin-bottom:1.5mm}
+.drv-stop .info{display:flex;flex-direction:column;min-width:0;font-size:11pt}   /* แต่ละบรรทัดตรงกับแถวตาราง */
+.drv-stop .info > div{height:var(--r);line-height:var(--r);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drv-stop .info .k{font-size:12pt;font-weight:700}
+.drv-stop .info .ln{font-size:14pt;font-weight:700}
+.drv-stop .info .no{margin-top:1.5mm;height:7mm;line-height:6.4mm;align-self:flex-start;font-size:14pt;font-weight:700;border:1.5pt solid #000;padding:0 3mm}
+table.docs{border-collapse:collapse;width:100%;table-layout:fixed;font-size:10pt;line-height:1.2}
+table.docs th,table.docs td{border:1px solid #000;padding:0 1.5mm;height:var(--r);white-space:nowrap;overflow:hidden}
 table.docs th{font-weight:700;text-align:center}
-table.docs td.c{width:22mm;text-align:center;font-size:10pt;line-height:1}
-.drv-stop .rmk{grid-column:1;width:96mm;margin:1.5mm 0 0 15.9mm;border:1px solid #000;height:9mm;padding:.6mm 1.5mm;font-size:9pt;font-weight:700;line-height:1.2}   /* ช่องหมายเหตุใต้ตารางเอกสาร */
-.drv-stop table.docs{grid-column:1}
-.drv-stop.c3{padding:7mm 0}.drv-stop.c3 table.docs th,.drv-stop.c3 table.docs td{height:4.2mm}.drv-stop.c3 .rmk{height:8mm}   /* 3 จุดส่ง : บีบระยะให้พอ 1 หน้า */
-.tag{grid-column:2;grid-row:2 / span 2;align-self:center;text-align:right;font-size:10pt;color:#374151;line-height:1.5;font-variant-numeric:tabular-nums}
-.tag .pk{display:block;font-size:12pt;font-weight:700;color:#000;white-space:nowrap;border-bottom:1pt solid #000;padding-bottom:1mm;margin-bottom:1.2mm}   /* เวลารับของ = เวลานัดที่หัวกระดาษ */
-.tag b{display:block;font-size:14pt;color:#000}
-.tag i{display:inline-block;font-style:normal;font-weight:700;font-size:12pt;color:#000;border:1.5pt solid #000;padding:0 3mm;margin-top:1mm}
+table.docs col.c{width:23%}
+table.docs td.c{text-align:center;font-size:11pt;line-height:1}
+.drv-stop .rmk{margin-top:1.5mm;height:7mm;border:1px solid #000;padding:.4mm 1.5mm;font-size:10pt;font-weight:700}
 
 /* ---- รายงานคลังสินค้า : 3 ชิ้น ---- */
 .wh{flex:1 1 0;--q:29.9mm}
@@ -135,15 +139,20 @@ function stampPages() {
 // รายงานที่ 1 : คนขับ / คนติดตาม  1 งานต่อ 1 หน้า แบ่ง 4 ชิ้นตามเส้นประ (ส่วนหัว + จุดส่ง 3 ช่อง)
 function driverPage(t) {
   const stops = (t.stops || []).slice(0, 3);
-  const docs = `<table class="docs"><tr><th>ให้ลูกค้าเซ็น</th><th>ส่งคืน ${esc(ORIGIN)}</th><th>เอกสาร</th></tr>
+  const docs = `<table class="docs"><colgroup><col class="c"><col class="c"><col></colgroup><tr><th>ให้ลูกค้าเซ็น</th><th>ส่งคืน ${esc(ORIGIN)}</th><th>เอกสาร</th></tr>
     ${DOCS.map(d => `<tr><td class="c">☐</td><td class="c">☐</td><td>${esc(d)}</td></tr>`).join('')}</table>`;
-  const line = (s, k) => `${k + 1}) ${esc(s.name)}${s.arrival ? ` (เวลานัด ${esc(s.arrival)})` : ''}${s.receiver ? ` &nbsp; ผู้รับ : ${esc(s.receiver)}` : ''}`;
+  const line = (s, k) => `${k + 1}) ${esc(s.name)}${s.arrival ? ` (เวลานัด ${esc(s.arrival)})` : ''}`;
   // ส่วนหัว: จุดส่งละ 2 บรรทัด (ชื่อจุดส่ง / เวลานัด + ผู้รับ ขีดเส้นใต้)
-  const stop = (s, k) => `<div class="txt stop">${k + 1}) ${esc(s.name)}<br>เวลานัด : <u>${esc(s.arrival || '-')}</u>${s.receiver ? ` &nbsp; ผู้รับ : <u>${esc(s.receiver)}</u>` : ''}</div>`;
+  const stop = (s, k) => `<div class="txt stop">${k + 1}) ${esc(s.name)}<span class="ap"><br> เวลานัด : <u>${esc(s.arrival || '-')}</u></span>${s.receiver ? `<span class="rv"> &nbsp; ผู้รับ : <u>${esc(s.receiver)}</u></span>` : ''}</div>`;
   const help = Array.isArray(CFG.QR_HELP_DRIVER) && CFG.QR_HELP_DRIVER.length ? `<div class="help"><b>วิธีใช้</b>${CFG.QR_HELP_DRIVER.map(x => `<div>${esc(x)}</div>`).join('')}</div>` : '';
-  const pk = t.pickup || t.client ? `<span class="pk">${join([t.pickup ? 'เวลารับของ ' + t.pickup + ' น.' : '', t.client])}</span>` : '';
-  const slot = k => stops[k] ? `<div class="piece drv-stop${stops.length > 2 ? ' c3' : ''}"><div class="name">${line(stops[k], k)}</div>${docs}<div class="rmk">หมายเหตุ :</div>
-      <div class="tag">${pk}<b>${esc(t.taskCode)}</b>${esc(DateBox.text(t.date || date))}${t.plate ? '<br>ทะเบียน ' + esc(t.plate) : ''}<br><i>จุดส่งที่ ${k + 1}/${stops.length}</i></div></div>`
+  const dmy = String(t.date || date).split('-').reverse().join('/');          // 14/10/2026
+  const u = v => v ? `<u>${esc(v)}</u>` : '______';
+  // ชิ้นจุดส่ง: ซ้าย = ข้อมูลงาน (บรรทัดตรงกับแถวตาราง), ขวา = ตารางเอกสาร + หมายเหตุ
+  const slot = k => stops[k] ? `<div class="piece drv-stop"><div class="name">${line(stops[k], k)}</div>
+      <div class="info"><div class="k">วันที่ ${esc(dmy)}</div><div class="k">เวลารับของ ${u(t.pickup)} น.</div><div class="k">ทะเบียน ${u(t.plate)}</div>
+        <div>${esc(t.taskCode)}</div><div>ผู้รับ :</div><div>${esc(stops[k].receiver || '-')}</div><div class="ln">${esc(t.client || '')}</div>
+        <div class="no">จุดส่งที่ ${k + 1}</div></div>
+      <div class="rt">${docs}<div class="rmk">หมายเหตุ :</div></div></div>`
     : '<div class="piece drv-stop"></div>';
   return sheet(`
     <div class="piece drv-main">
@@ -182,12 +191,21 @@ function draw() {
   }
   $('pages').innerHTML = html;
   pending.forEach(([id, text]) => new QRCode($(id), { text, width: 360, height: 360, correctLevel: QRCode.CorrectLevel.M }));
-  stampPages();
+  stampPages(); fitMain();
   const name = { driver: 'รายงานคนขับ (1 งานต่อหน้า ตัด 4 ชิ้น)', wh: 'รายงานคลังสินค้า (3 งานต่อหน้า ตัด 3 ชิ้น)', both: 'ทั้ง 2 รายงาน' }[k];
   $('info').textContent = tasks.length ? `${tasks.length} งาน · ${name} · ${pages} หน้า A4 แนวตั้ง` : 'ไม่มีแผนจัดส่งของวันที่เลือก';
   $('printBtn').disabled = !tasks.length; $('printBtn').textContent = 'พิมพ์' + ({ driver: 'รายงานคนขับ', wh: 'รายงานคลังสินค้า', both: 'ทั้ง 2 รายงาน' }[k]);
 }
+// ชิ้นบนของรายงานคนขับต้องจบในชิ้นเดียว : ถ้าล้นให้ย่อทีละขั้น (f1 ตัวเล็กลง → f2 ซ่อนผู้รับ (มีในชิ้นจุดส่งแล้ว) → f3 เวลานัดต่อท้ายบรรทัด)
+function fitMain() {
+  document.querySelectorAll('.drv-main').forEach(m => {
+    m.classList.remove('f1', 'f2', 'f3');
+    for (let i = 1; i <= 3 && m.scrollHeight > m.clientHeight + 1; i++) m.classList.add('f' + i);
+  });
+}
+if (document.fonts) document.fonts.ready.then(fitMain);
 window.addEventListener('beforeprint', stampPages);
+window.addEventListener('beforeprint', fitMain);
 // ชื่อไฟล์ตอนบันทึกเป็น PDF = ชื่อหน้า (title) ขณะสั่งพิมพ์ : QR คนขับ / QR คลังสินค้า / QR รวม + วันที่เวลาที่พิมพ์ เช่น QR คนขับ 20261013 1551
 const baseTitle = document.title;
 function printTitle() {
