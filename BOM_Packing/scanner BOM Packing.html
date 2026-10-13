@@ -94,8 +94,8 @@
   <img src="icon-192.png" alt="">
   <h1>BOM Packing</h1>
   <form id="loginForm" class="card">
-    <label>ชื่อผู้ใช้
-      <input id="u" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label>อีเมล
+      <input id="u" type="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
     </label>
     <label>รหัสผ่าน
       <input id="p" type="password" autocomplete="current-password" required>
@@ -128,7 +128,6 @@
 <script>
   const SUPABASE_URL = "https://vmpcfiefryvfovqjhewy.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_ZizU3_OdW6cOrouQXo7JsA_cYCySG9H";
-  const EMAIL_DOMAIN = "@scmref.local";
 
   const $ = (id) => document.getElementById(id);
   const q = $("q"), app = $("app"), listEl = $("list"), detail = $("detail"), wrap = $("reader-wrap");
@@ -207,7 +206,7 @@
     btn.textContent = "กำลังตรวจสอบ…";
     showLoginMsg("");
     try {
-      const email = $("u").value.trim() + EMAIL_DOMAIN;
+      const email = $("u").value.trim();
       const { ok, data } = await authFetch("token?grant_type=password", { email, password: $("p").value });
       if (!ok) {
         showLoginMsg("เข้าสู่ระบบไม่ได้ (ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง)");
