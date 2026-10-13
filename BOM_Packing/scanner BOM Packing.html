@@ -126,20 +126,23 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-  // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
-  const API_URL = "https://script.google.com/macros/s/AKfycbwoKmgi7YWr16z1-q6UyXrJt_3yG0WCV-lTGn9pwtuxjWpz7RteQ0gyqYL1DL_qbfbnhA/exec";
+  const SUPABASE_URL = "https://vmpcfiefryvfovqjhewy.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_ZizU3_OdW6cOrouQXo7JsA_cYCySG9H";
+  const EMAIL_DOMAIN = "@scmref.local";
 
   const $ = (id) => document.getElementById(id);
   const q = $("q"), app = $("app"), listEl = $("list"), detail = $("detail"), wrap = $("reader-wrap");
   const DETAIL_HINT = "เลือก FG จากรายการเพื่อดู BOM Packing";
   const TOKEN_KEY = "bom_token";
+  const REFRESH_KEY = "bom_refresh";
 
-  let all = [];            // รายการ FG ทั้งหมด
-  let bom = {};            // FG code (ตัวพิมพ์ใหญ่) -> [[Item Number, Product Name, Unit, Use Qty], ...]
-  let ready = false;       // โหลดข้อมูลครบแล้วหรือยัง
-  let pending = null;      // ค่าที่สแกน/พิมพ์ก่อนโหลดเสร็จ
-  let selected = "";       // FG code ที่เลือกอยู่
+  let all = [];
+  let bom = {};
+  let ready = false;
+  let pending = null;
+  let selected = "";
   let scanner = null;
+  let refreshTimer = null;
 
   const store = {
     get: (k) => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
@@ -147,31 +150,54 @@
     del: (k) => { try { localStorage.removeItem(k); } catch (e) {} },
   };
   let token = store.get(TOKEN_KEY);
+  let refreshToken = store.get(REFRESH_KEY);
 
-  // ตัดข้อความหลัง "::" ออก  เช่น 3-01-10001::TS.. -> 3-01-10001
   const clean = (raw) => String(raw).split("::")[0].trim();
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const msg = (t, err) => `<div class="msg${err ? " err" : ""}">${esc(t)}</div>`;
 
-  // ส่งแบบ POST ไม่ตั้ง header เพื่อให้เป็น simple request (ไม่ติด CORS preflight ของ Apps Script)
-  async function post(body) {
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (HTTP " + res.status + "): " + text.replace(/\s+/g, " ").slice(0, 120));
-    }
-  }
-
-  // ---------- Login / Logout ----------
+  // ---------- Login / Logout / Refresh (Supabase Auth) ----------
   const setAuthed = (on) => document.body.classList.toggle("authed", on);
 
   function showLoginMsg(text) {
     const m = $("loginMsg");
     m.textContent = text;
     m.hidden = !text;
+  }
+
+  async function authFetch(path, body) {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, data };
+  }
+
+  function applySession(data) {
+    token = data.access_token;
+    refreshToken = data.refresh_token;
+    store.set(TOKEN_KEY, token);
+    store.set(REFRESH_KEY, refreshToken);
+    scheduleRefresh(data.expires_in || 3600);
+  }
+
+  function scheduleRefresh(expiresInSec) {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    const ms = Math.max((expiresInSec - 60) * 1000, 10000); // รีเฟรชก่อนหมดอายุ 60 วิ
+    refreshTimer = setTimeout(doRefresh, ms);
+  }
+
+  async function doRefresh() {
+    if (!refreshToken) return;
+    const { ok, data } = await authFetch("token?grant_type=refresh_token", { refresh_token: refreshToken });
+    if (ok) {
+      applySession(data);
+    } else {
+      logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+    }
   }
 
   $("loginForm").addEventListener("submit", async (e) => {
@@ -181,12 +207,12 @@
     btn.textContent = "กำลังตรวจสอบ…";
     showLoginMsg("");
     try {
-      const d = await post({ action: "login", user: $("u").value, pass: $("p").value });
-      if (!d.ok) {
-        showLoginMsg(d.error || "เข้าสู่ระบบไม่ได้");
+      const email = $("u").value.trim() + EMAIL_DOMAIN;
+      const { ok, data } = await authFetch("token?grant_type=password", { email, password: $("p").value });
+      if (!ok) {
+        showLoginMsg("เข้าสู่ระบบไม่ได้ (ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง)");
       } else {
-        token = d.token;
-        store.set(TOKEN_KEY, token);
+        applySession(data);
         $("p").value = "";
         setAuthed(true);
         loadAll();
@@ -198,10 +224,11 @@
     btn.textContent = "เข้าสู่ระบบ";
   });
 
-  async function logout(message, notifyServer) {
+  async function logout(message) {
     const old = token;
-    token = "";
-    store.del(TOKEN_KEY);
+    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+    token = ""; refreshToken = "";
+    store.del(TOKEN_KEY); store.del(REFRESH_KEY);
     await stopScan();
     all = []; bom = {}; ready = false; pending = null; selected = "";
     q.value = "";
@@ -210,24 +237,55 @@
     detail.innerHTML = msg(DETAIL_HINT);
     setAuthed(false);
     showLoginMsg(message || "");
-    if (notifyServer && old) post({ action: "logout", token: old }).catch(() => {});
+    if (old) fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${old}` },
+    }).catch(() => {});
   }
 
-  $("logout").addEventListener("click", () => logout("", true));
+  $("logout").addEventListener("click", () => logout(""));
 
-  // ---------- โหลดข้อมูลทั้งหมดรอบเดียว ----------
+  // ---------- โหลดข้อมูลทั้งหมด (จาก Supabase, ต้อง login ก่อน) ----------
   async function loadAll(attempt = 1) {
     try {
-      const d = await post({ action: "all", token });
-      if (d.needLogin) return logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่", false);
-      if (!d.ok) throw new Error(d.error);
-      all = d.fg;
-      bom = d.bom;
+      const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` };
+      let [fgRes, useRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/bom_packing?select=no,col_b,col_c&order=no`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/bom_packing_use?select=col_b,col_d,col_e,col_f,col_g&order=no`, { headers }),
+      ]);
+
+      if (fgRes.status === 401 || useRes.status === 401) {
+        if (refreshToken) {
+          await doRefresh();
+          if (!token) return; // doRefresh ล้มเหลวและ logout ไปแล้ว
+          const headers2 = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` };
+          [fgRes, useRes] = await Promise.all([
+            fetch(`${SUPABASE_URL}/rest/v1/bom_packing?select=no,col_b,col_c&order=no`, { headers: headers2 }),
+            fetch(`${SUPABASE_URL}/rest/v1/bom_packing_use?select=col_b,col_d,col_e,col_f,col_g&order=no`, { headers: headers2 }),
+          ]);
+        } else {
+          return logout("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+        }
+      }
+      if (!fgRes.ok) throw new Error("โหลด BOM_Packing ไม่ได้ (HTTP " + fgRes.status + ")");
+      if (!useRes.ok) throw new Error("โหลด BOM_Packing_Use ไม่ได้ (HTTP " + useRes.status + ")");
+
+      const fgRows = await fgRes.json();
+      const useRows = await useRes.json();
+
+      all = fgRows.map((r) => ({ code: r.col_b, line: r.no, model: r.col_c }));
+
+      bom = {};
+      for (const r of useRows) {
+        const key = String(r.col_b).toUpperCase();
+        (bom[key] ||= []).push([r.col_d, r.col_e, r.col_f, r.col_g]);
+      }
+
       ready = true;
       renderList();
       if (pending !== null) { const p = pending; pending = null; search(p); }
     } catch (err) {
-      if (attempt < 2) return setTimeout(() => loadAll(2), 1500); // ลองซ้ำอัตโนมัติ 1 ครั้ง
+      if (attempt < 2) return setTimeout(() => loadAll(2), 1500);
       listEl.innerHTML = msg("โหลดข้อมูลไม่ได้: " + err.message, true) +
         `<div class="msg"><button type="button" id="retry">ลองใหม่</button></div>`;
     }
@@ -340,8 +398,7 @@
   $("form").addEventListener("submit", (e) => { e.preventDefault(); search(q.value); });
   q.addEventListener("input", renderList);
 
-  // เริ่มต้น: มี token เก็บไว้ก็โหลดข้อมูลเลย ถ้าไม่มีก็แสดงหน้า Login
-  if (token) { setAuthed(true); loadAll(); } else { setAuthed(false); }
+  if (token) { setAuthed(true); scheduleRefresh(3000); loadAll(); } else { setAuthed(false); }
 </script>
 </body>
 </html>
