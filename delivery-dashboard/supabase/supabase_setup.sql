@@ -1,5 +1,5 @@
 -- =====================================================================
--- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.12-s14)
+-- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.14-s15)
 -- วิธีใช้ : Supabase > SQL Editor > New query > วางทั้งไฟล์นี้ > กด Run
 -- รันซ้ำได้ ข้อมูลเดิมไม่หาย (ใช้ตอนผมส่งรุ่นแก้ไขมาให้)
 -- =====================================================================
@@ -337,6 +337,16 @@ $$;
 
 -- ---------- 4. Dashboard (ต้องเข้าสู่ระบบ) ----------
 -- สรุปรายวันของเดือน (YYYY-MM) สำหรับหน้าปฏิทิน
+-- งานจบแล้วหรือยัง (กติกาเดียวกับหน้า Dashboard) : มี Log จบงาน หรือ รอบเดียว = ลงงานจุดสุดท้ายแล้ว / ไป-กลับ = รถกลับถึงต้นทางแล้ว
+create or replace function public.task_done(p public.plan) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.road_log l where l.task_code = p.task_code and (l.finish
+    or (coalesce(p.round, '') like '%กลับ%' and l.type = 'return')
+    or (coalesce(p.round, '') not like '%กลับ%' and l.type = 'unload'
+        and l.stop = greatest(1, (public.blank(p.stop1) <> '')::int + (public.blank(p.stop2) <> '')::int + (public.blank(p.stop3) <> '')::int))))
+$$;
+revoke all on function public.task_done(public.plan) from public, anon, authenticated;
+
 create or replace function public.month_summary(p_month text) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare d0 date := to_date(p_month || '-01', 'YYYY-MM-DD'); r jsonb;
@@ -346,7 +356,7 @@ begin
   from (
     select to_char(t.date, 'YYYY-MM-DD') as d,
            count(*) filter (where not public.is_canceled(t.status)) as total,
-           count(*) filter (where not public.is_canceled(t.status) and exists (select 1 from public.road_log l where l.task_code = t.task_code and l.finish)) as done,
+           count(*) filter (where not public.is_canceled(t.status) and public.task_done(t)) as done,
            count(*) filter (where public.is_canceled(t.status)) as canceled
     from public.plan t
     where t.date >= d0 and t.date < (d0 + interval '1 month')::date
@@ -835,13 +845,14 @@ begin
               n := n + 1;
             end if;
           elsif d > geo[3] * 1.5 then
-            insert into public.road_log (time, task_code, type, stop, plate, note, source) values (g.box_time, p.task_code, 'unload', k0, eff, 'GPS อัตโนมัติ: รถออกจากจุดส่ง', 'GPS');
+            insert into public.road_log (time, task_code, type, stop, plate, note, source, finish)          -- จุดสุดท้ายของงานรอบเดียว = จบงาน
+            values (g.box_time, p.task_code, 'unload', k0, eff, 'GPS อัตโนมัติ: รถออกจากจุดส่ง', 'GPS', k0 = ns and not rt);
             n := n + 1;
           end if;
         end if;
       elsif rt and d_o is not null and d_o <= o_r
             and not exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'return') then
-        insert into public.road_log (time, task_code, type, plate, note, source) values (g.box_time, p.task_code, 'return', eff, 'GPS อัตโนมัติ: รถกลับถึงต้นทาง', 'GPS');
+        insert into public.road_log (time, task_code, type, plate, note, source, finish) values (g.box_time, p.task_code, 'return', eff, 'GPS อัตโนมัติ: รถกลับถึงต้นทาง', 'GPS', true);
         n := n + 1;
       end if;
     end if;
@@ -1501,3 +1512,13 @@ grant execute on function public.plan_map(date) to authenticated;
 select 'ตั้งค่าเสร็จแล้ว' as result,
        (select count(*) from public.plan) as plan_rows,
        (select count(*) from public.profiles) as users;
+
+-- ---------- 15. รุ่น s15 : Log จบงานจาก GPS ----------
+-- GPS บันทึก "ลงงานจุดสุดท้าย / รถกลับถึงต้นทาง" แต่เดิมไม่ได้ติดธงจบงาน -> ปฏิทินนับงานจบไม่ครบ : เติมธงให้ Log เก่า (รันซ้ำได้)
+update public.road_log l set finish = true
+from public.plan p
+where l.task_code = p.task_code and not l.finish and l.source = 'GPS'
+  and not exists (select 1 from public.road_log x where x.task_code = l.task_code and x.finish)
+  and ((coalesce(p.round, '') like '%กลับ%' and l.type = 'return')
+    or (coalesce(p.round, '') not like '%กลับ%' and l.type = 'unload'
+        and l.stop = greatest(1, (public.blank(p.stop1) <> '')::int + (public.blank(p.stop2) <> '')::int + (public.blank(p.stop3) <> '')::int)));
