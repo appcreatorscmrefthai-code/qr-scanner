@@ -3,9 +3,9 @@
   const { $, esc, hhmm } = DF;
   let task = null, chain = Promise.resolve(), pending = 0, gen = 0, etaEditing = false, etaKey = null;
   const ctx = () => ({ taskCode: task && task.taskCode, stop: task ? nextStop() + 1 : 0 });
-  const pkRoad = DF.makePicker({ key: 'road', kind: 'road', el: 'pkRoad', max: 5, maxMB: 5, label: 'รูปสถานการณ์บนถนน', context: ctx });
-  const pkUnload = DF.makePicker({ key: 'unload', kind: 'unload', el: 'pkUnload', max: 20, maxMB: 50, label: 'รูปลงงาน', context: ctx });
-  const pkReturn = DF.makePicker({ key: 'unload', kind: 'unload', el: 'pkReturn', max: 20, maxMB: 50, label: 'รูปที่ SCM ตอนรถกลับ', context: ctx });
+  const pkRoad = DF.makePicker({ key: 'road', kind: 'road', el: 'pkRoad', max: 5, maxMB: 5, perSend: true, label: 'รูปสถานการณ์บนถนน', context: ctx });
+  const pkUnload = DF.makePicker({ key: 'unload', kind: 'unload', el: 'pkUnload', max: DF.MAX_STOP, maxMB: 50, label: 'รูปลงงาน', context: ctx });
+  const pkReturn = DF.makePicker({ key: 'unload', kind: 'unload', el: 'pkReturn', max: DF.MAX_STOP, maxMB: 50, label: 'รูปที่ SCM ตอนรถกลับ', context: ctx });
 
   const show = (id, on) => { $(id).hidden = !on; };
   // จุดถัดไปที่ยังไม่ลงงาน (เริ่มที่ 0) ถ้าครบแล้วคืน -1
@@ -31,6 +31,10 @@
     const fin = allDone && !back;
     const atSite = !allDone && !!s.arrive[k];
     $('taskBox').innerHTML = DF.taskCard(task);
+    // รูปที่ส่งแล้ว (ดูอย่างเดียว) + จำนวนที่ส่งเพิ่มได้ของจุดปัจจุบัน
+    show('sentCard', DF.sentBox('sentBox', DF.photoGroups(task)) > 0);
+    if (!allDone) pkUnload.setSent(DF.stopPhotos(task, k + 1).length);
+    pkReturn.setSent(DF.stopPhotos(task, 0).length);
 
     // 1. เช็คอิน
     show('s1done', !!s.checkin); show('s1form', !s.checkin);
@@ -115,12 +119,19 @@
     chain = job.then(d => {
       pending--; showSync(`บันทึกเข้าระบบแล้ว ${hhmm(d.time)} น. (${((Date.now() - t0) / 1000).toFixed(1)} วินาที)`);
       if (!pending && d.task && my === gen) { task = d.task; render(false); }     // Code.gs รุ่นเก่ายังส่งสถานะกลับมา
+      else refresh(code, my);
+      if (d.photos) d.photos.then(() => refresh(code, my));                        // รูปที่แนบตามไปส่งครบแล้ว : อัปเดตรูปที่ส่งแล้ว
     }, async e => {
       pending--; showSync('');
       DF.say('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' กรุณาตรวจอินเทอร์เน็ตแล้วกดอีกครั้ง');
       try { const d = await DF.apiGet({ action: 'task', code }); if (d.ok && my === gen) { task = d.task; render(false); } } catch (x) { }
     });
     return true;
+  }
+  // ดึงสถานะจริงจากระบบ (เฉพาะตอนไม่มีรายการค้างส่ง) เพื่ออัปเดตรูปที่ส่งแล้ว
+  async function refresh(code, my) {
+    if (pending || my !== gen) return;
+    try { const d = await DF.apiGet({ action: 'task', code }); if (d.ok && !pending && my === gen) { task = d.task; render(false); } } catch (e) { }
   }
   function showSync(doneText) {
     const el = $('sync'); if (!el) return;

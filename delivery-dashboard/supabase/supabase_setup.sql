@@ -1,5 +1,5 @@
 -- =====================================================================
--- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.14-s15)
+-- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.14-s16)
 -- วิธีใช้ : Supabase > SQL Editor > New query > วางทั้งไฟล์นี้ > กด Run
 -- รันซ้ำได้ ข้อมูลเดิมไม่หาย (ใช้ตอนผมส่งรุ่นแก้ไขมาให้)
 -- =====================================================================
@@ -76,6 +76,10 @@ alter table public.road_log   add column if not exists source text not null defa
 alter table public.road_log drop constraint if exists road_log_type_check;
 alter table public.road_log add constraint road_log_type_check check (type in ('checkin', 'depart', 'eta', 'road', 'arrive', 'unload', 'return'));
 update public.pickup_log set source = 'GPS' where source <> 'GPS' and note like 'GPS อัตโนมัติ%';
+-- รุ่น s16 : รูปส่งงานแยกฝ่าย WH (คลังสินค้า) / QA (ประกันคุณภาพ) ; รายการเดิมทั้งหมดเป็น WH
+alter table public.pickup_log add column if not exists dept text not null default 'WH';
+alter table public.pickup_log drop constraint if exists pickup_log_dept_check;
+alter table public.pickup_log add constraint pickup_log_dept_check check (dept in ('WH', 'QA'));
 update public.road_log   set source = 'GPS' where source <> 'GPS' and note like 'GPS อัตโนมัติ%';
 
 -- ผู้ใช้ของ Dashboard : admin = ทำได้ทุกอย่าง (รวมลบงาน), edit = ส่งแผนและแก้ไขได้, viewer = ดูอย่างเดียว (ดูลิงก์และรูปได้)
@@ -207,12 +211,24 @@ language sql stable security definer set search_path = public as $$
   where l.task_code = p_task and ((p_stop = 0 and l.type = 'return') or (p_stop > 0 and l.stop = p_stop and l.type in ('arrive', 'unload')))
 $$;
 
+-- จำนวนรูปที่ส่งแล้ว (รวมทุกครั้ง) : รูปลงงานของจุดนั้น (p_stop = 0 : รูปตอนรถกลับถึงต้นทาง) / รูปส่งงานของฝ่าย WH, QA
+create or replace function public.stop_photo_count(p_task text, p_stop int) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(cardinality(l.unload)), 0)::int from public.road_log l
+  where l.task_code = p_task and ((p_stop = 0 and l.type = 'return') or (p_stop > 0 and l.stop = p_stop and l.type in ('arrive', 'unload')))
+$$;
+create or replace function public.dept_photo_count(p_task text, p_dept text) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(cardinality(l.photos)), 0)::int from public.pickup_log l where l.task_code = p_task and l.dept = p_dept and l.source <> 'GPS'
+$$;
+
 create or replace function public.form_submit(p jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   t public.plan; n int; rt boolean; v_note text; v_type text := coalesce(p->>'type', '');
   v_stop int := coalesce(nullif(p->>'stop', '')::int, 0); v_id bigint; v_fin boolean := false; v_now timestamptz := now();
   v_plate text; v_changed boolean; e text[]; ph text[]; pre text; v_last timestamptz; v_ref timestamptz;
+  v_dept text; v_have int; v_pend boolean := coalesce((p->>'pending')::boolean, false);
 begin
   t := public.task_check(p->>'taskCode', p->>'k');
   pre := t.task_code || '/';
@@ -223,14 +239,17 @@ begin
   rt := t.round ~ 'กลับ';
   v_note := left(coalesce(p->>'note', ''), 2000);
 
-  if p->>'form' = 'pickup' then
-    -- รูปจากคลังสินค้า : ส่งได้เรื่อยๆ จนกว่าจะผ่าน 24 ชม. นับจากการอัปโหลดครั้งล่าสุด (ไม่บันทึกเวลารถออกอีกแล้ว)
-    select max(time) into v_last from public.pickup_log where task_code = t.task_code and source <> 'GPS';
+  if p->>'form' in ('pickup', 'qa') then
+    -- รูปส่งงาน WH (pickup.html) / QA (qa.html) : ส่งได้หลายครั้งจนกว่าจะผ่าน 24 ชม. นับจากอัปโหลดครั้งล่าสุดของฝ่ายนั้น รวมไม่เกิน 20 รูปต่อฝ่าย
+    v_dept := case when p->>'form' = 'qa' then 'QA' else 'WH' end;
+    select max(time) into v_last from public.pickup_log where task_code = t.task_code and source <> 'GPS' and dept = v_dept;
     if v_last is not null and v_now > v_last + interval '24 hours' then
-      raise exception 'ปิดรับรูปจากคลังสินค้าแล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)';
+      raise exception 'ปิดรับรูปจาก % แล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)', v_dept;
     end if;
-    ph := public.photo_list(p->'photos', pre, 20, t.key);
-    insert into public.pickup_log (time, task_code, note, photos) values (v_now, t.task_code, v_note, coalesce(ph[1:20], '{}')) returning id into v_id;
+    v_have := public.dept_photo_count(t.task_code, v_dept);
+    if v_have >= 20 then raise exception 'ส่งรูปจาก % ครบ 20 รูปแล้ว ส่งเพิ่มไม่ได้', v_dept; end if;
+    ph := public.photo_list(p->'photos', pre, 20 - v_have, t.key);
+    insert into public.pickup_log (time, task_code, note, photos, dept) values (v_now, t.task_code, v_note, coalesce(ph, '{}'), v_dept) returning id into v_id;
 
   elsif p->>'form' = 'driver' then
     e := array[public.hm(p->'eta'->>0), case when n >= 2 then public.hm(p->'eta'->>1) else '' end, case when n >= 3 then public.hm(p->'eta'->>2) else '' end];
@@ -263,15 +282,16 @@ begin
         values (v_now, t.task_code, 'road', v_note, e[1], e[2], e[3], coalesce(ph[1:5], '{}')) returning id into v_id;
     elsif v_type in ('arrive', 'unload') then
       if v_stop < 1 or v_stop > n then raise exception 'จุดส่งไม่ถูกต้อง'; end if;
-      ph := case when v_type = 'unload' then public.photo_list(p->'unload', pre, 20, t.key) else '{}' end;
+      v_have := public.stop_photo_count(t.task_code, v_stop);                   -- รูปลงงานรวมไม่เกิน 20 รูปต่อจุด
+      ph := case when v_type = 'unload' then public.photo_list(p->'unload', pre, greatest(0, 20 - v_have), t.key) else '{}' end;
       v_fin := v_type = 'unload' and v_stop = n and not rt;       -- ลงงานจุดสุดท้าย = จบงาน (งานไป-กลับจบเมื่อรถกลับถึงต้นทาง)
       insert into public.road_log (time, task_code, type, stop, note, unload, finish)
-        values (v_now, t.task_code, v_type, v_stop, v_note, coalesce(ph[1:20], '{}'), v_fin) returning id into v_id;
+        values (v_now, t.task_code, v_type, v_stop, v_note, coalesce(ph, '{}'), v_fin) returning id into v_id;
     elsif v_type = 'return' then
       if not rt then raise exception 'งานนี้ไม่ใช่รอบไป-กลับ'; end if;
       v_fin := true;
-      ph := public.photo_list(p->'unload', pre, 20, t.key);                  -- รูปลงงานที่ SCM (ถ้ามี)
-      insert into public.road_log (time, task_code, type, note, unload, finish) values (v_now, t.task_code, 'return', v_note, coalesce(ph[1:20], '{}'), true) returning id into v_id;
+      ph := public.photo_list(p->'unload', pre, greatest(0, 20 - public.stop_photo_count(t.task_code, 0)), t.key);     -- รูปลงงานที่ SCM (ถ้ามี)
+      insert into public.road_log (time, task_code, type, note, unload, finish) values (v_now, t.task_code, 'return', v_note, coalesce(ph, '{}'), true) returning id into v_id;
     elsif v_type = 'photo' then
       -- แนบรูปลงงานย้อนหลัง (ฟอร์ม GPS) : จุดที่ v_stop (0 = รูปที่ SCM ตอนกลับถึง) ต้องมีบันทึกถึง/ลงงานแล้ว และยังไม่เกิน 24 ชม.
       v_ref := public.stop_photo_ref(t.task_code, v_stop);
@@ -283,9 +303,11 @@ begin
       if v_note <> '' then
         update public.road_log set note = left(case when note = '' then v_note else note || E'\n' || v_note end, 2000) where id = v_id;
       end if;
-      ph := public.photo_list(p->'unload', pre, 20, t.key);
+      v_have := public.stop_photo_count(t.task_code, v_stop);
+      if v_have >= 20 and not v_pend and v_note = '' then raise exception 'ส่งรูปจุดนี้ครบ 20 รูปแล้ว ส่งเพิ่มไม่ได้'; end if;
+      ph := public.photo_list(p->'unload', pre, greatest(0, 20 - v_have), t.key);
       if coalesce(array_length(ph, 1), 0) > 0 then
-        update public.road_log set unload = coalesce((unload || ph)[1:20], '{}') where id = v_id;
+        update public.road_log set unload = unload || ph where id = v_id;
       end if;
     else
       raise exception 'ไม่รู้จักประเภทรายการ';
@@ -300,14 +322,16 @@ end $$;
 create or replace function public.form_attach(p jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare t public.plan; v_id bigint := (p->>'id')::bigint; pre text; cur text[]; add text[]; v_type text; v_stop int; v_ref timestamptz; v_last timestamptz;
+  v_dept text; v_other int;
 begin
   t := public.task_check(p->>'taskCode', p->>'k');
   pre := t.task_code || '/';
-  if p->>'form' = 'pickup' then
-    select photos into cur from public.pickup_log where id = v_id and task_code = t.task_code for update;
+  if p->>'form' in ('pickup', 'qa') then
+    select photos, dept into cur, v_dept from public.pickup_log where id = v_id and task_code = t.task_code for update;
     if not found then raise exception 'ไม่พบรายการที่จะแนบรูป'; end if;
-    add := public.photo_list(to_jsonb(cur) || coalesce(p->'photos', '[]'::jsonb), pre, 20, t.key);
-    update public.pickup_log set photos = coalesce(add[1:20], '{}') where id = v_id;
+    v_other := public.dept_photo_count(t.task_code, v_dept) - cardinality(cur);          -- รวมทุกครั้งของฝ่ายนั้นไม่เกิน 20 รูป
+    add := public.photo_list(to_jsonb(cur) || coalesce(p->'photos', '[]'::jsonb), pre, greatest(cardinality(cur), 20 - v_other), t.key);
+    update public.pickup_log set photos = coalesce(add, '{}') where id = v_id;
   else
     select road, type, stop into cur, v_type, v_stop from public.road_log where id = v_id and task_code = t.task_code for update;
     if not found then raise exception 'ไม่พบรายการที่จะแนบรูป'; end if;
@@ -318,8 +342,9 @@ begin
     add := public.photo_list(to_jsonb(cur) || coalesce(p->'road', '[]'::jsonb), pre, 5, t.key);
     update public.road_log set road = coalesce(add[1:5], '{}') where id = v_id;
     select unload into cur from public.road_log where id = v_id;
-    add := public.photo_list(to_jsonb(cur) || coalesce(p->'unload', '[]'::jsonb), pre, 20, t.key);
-    update public.road_log set unload = coalesce(add[1:20], '{}') where id = v_id;
+    v_other := case when v_type in ('arrive', 'unload', 'return') then public.stop_photo_count(t.task_code, case when v_type = 'return' then 0 else v_stop end) - cardinality(cur) else 0 end;
+    add := public.photo_list(to_jsonb(cur) || coalesce(p->'unload', '[]'::jsonb), pre, greatest(cardinality(cur), 20 - v_other), t.key);
+    update public.road_log set unload = coalesce(add, '{}') where id = v_id;
   end if;
   return jsonb_build_object('id', v_id);
 end $$;
@@ -622,7 +647,7 @@ from public.plan t;
 
 create or replace view public.v_pickup_log with (security_invoker = true) as
 select l.id, t.date as task_date, to_char(l.time at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS') as ts, l.task_code, l.note,
-       coalesce(array_length(l.photos, 1), 0) as photo_count, array_to_string(l.photos, ' | ') as photos, l.source
+       coalesce(array_length(l.photos, 1), 0) as photo_count, array_to_string(l.photos, ' | ') as photos, l.source, l.dept
 from public.pickup_log l join public.plan t on t.task_code = l.task_code;
 
 create or replace view public.v_road_log with (security_invoker = true) as
@@ -1390,7 +1415,7 @@ begin
               'created', to_char(t.created_at at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS'), 'synced', to_char(t.updated_at at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS')) order by t.date, t.task_code), '[]')
              from public.plan t where p_from is null or t.date >= p_from),
     'pickup', (select coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'ts', to_char(l.time at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS'), 'task_code', l.task_code,
-              'note', l.note, 'photos', to_jsonb(l.photos), 'source', l.source) order by l.id), '[]')
+              'note', l.note, 'photos', to_jsonb(l.photos), 'source', l.source, 'dept', l.dept) order by l.id), '[]')
              from public.pickup_log l join public.plan t on t.task_code = l.task_code where p_from is null or t.date >= p_from),
     'road', (select coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'ts', to_char(l.time at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS'), 'task_code', l.task_code,
               'type', l.type, 'stop', l.stop, 'plate', l.plate, 'old_plate', l.old_plate, 'note', l.note, 'eta1', l.eta1, 'eta2', l.eta2, 'eta3', l.eta3,
@@ -1522,3 +1547,40 @@ where l.task_code = p.task_code and not l.finish and l.source = 'GPS'
   and ((coalesce(p.round, '') like '%กลับ%' and l.type = 'return')
     or (coalesce(p.round, '') not like '%กลับ%' and l.type = 'unload'
         and l.stop = greatest(1, (public.blank(p.stop1) <> '')::int + (public.blank(p.stop2) <> '')::int + (public.blank(p.stop3) <> '')::int)));
+
+-- ---------- 16. รุ่น s16 : ฟอร์ม QA, ดูรูปที่ส่งแล้วในฟอร์ม, admin ลบรูปรายรูป ----------
+-- ฟอร์มมือถือ (ไม่เข้าสู่ระบบ) เปิดดูรูปของงานได้เฉพาะงานที่ยังอยู่ในช่วงเปิดฟอร์ม (เหมือนสิทธิ์อ่านข้อมูลงานจาก QR) ลบไม่ได้
+create or replace function public.photo_view_ok(p_name text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.plan t
+    where t.task_code = split_part(p_name, '/', 1) and public.form_window_ok(t.date) and not public.is_canceled(t.status))
+$$;
+grant execute on function public.photo_view_ok(text) to anon, authenticated;
+drop policy if exists photos_form_read on storage.objects;
+create policy photos_form_read on storage.objects for select to anon
+  using (bucket_id = 'photos' and public.photo_view_ok(name));
+
+-- ลบรูปทีละรูปจาก Popup (เฉพาะ admin) : เอารูปออกจาก Log แล้วหน้าเว็บลบไฟล์ในที่เก็บรูปต่อ บันทึกประวัติลง edit_log
+create or replace function public.photo_remove(p_code text, p_path text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_who text; n int := 0; m int := 0; v_where text := '';
+begin
+  if not public.is_admin() then raise exception 'FORBIDDEN'; end if;
+  select coalesce(nullif(name, ''), email) into v_who from public.profiles where user_id = auth.uid();
+  select string_agg(distinct w, ', ') into v_where from (
+    select 'รูปจาก ' || dept as w from public.pickup_log where task_code = p_code and p_path = any(photos)
+    union all select case when type = 'return' then 'รูปตอนรถกลับ' when p_path = any(road) then 'รูปบนถนน' else 'รูปลงงานจุดที่ ' || stop end
+      from public.road_log where task_code = p_code and (p_path = any(road) or p_path = any(unload))) a;
+  update public.pickup_log set photos = array_remove(photos, p_path) where task_code = p_code and p_path = any(photos);
+  get diagnostics n = row_count;
+  update public.road_log set road = array_remove(road, p_path), unload = array_remove(unload, p_path)
+    where task_code = p_code and (p_path = any(road) or p_path = any(unload));
+  get diagnostics m = row_count;
+  if n + m = 0 then raise exception 'ไม่พบรูปนี้ในงาน % (อาจถูกลบไปแล้ว)', p_code; end if;
+  insert into public.edit_log (task_code, source, field, old_value, new_value, by_user)
+    values (p_code, 'Dashboard (Popup)', 'ลบรูป (' || coalesce(v_where, '') || ')', p_path, '', v_who);
+  return jsonb_build_object('removed', n + m);
+end $$;
+revoke all on function public.photo_remove(text, text), public.stop_photo_count(text, int), public.dept_photo_count(text, text) from public, anon, authenticated;
+grant execute on function public.photo_remove(text, text) to authenticated;

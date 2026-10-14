@@ -77,6 +77,12 @@ main{flex:1;display:flex;flex-direction:column;padding:0 clamp(16px,2.2vw,44px);
 
 .time{font-size:1.5em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
 .time span{font-size:.6em;font-weight:500;color:var(--muted);margin-left:.4em}
+/* ชื่อบริษัทขนส่งต่อจากเวลา (ถ้าเป็นลิงก์กดเปิดได้) */
+.pick .time{display:flex;align-items:baseline;min-width:0}
+.time .co{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:.52em;font-weight:600;color:#cbd5e1;margin-left:.7em;padding-left:.7em;border-left:1px solid var(--rule)}
+.co a{color:var(--departed);text-decoration:underline;text-underline-offset:2px}
+.co a:hover,.co a:focus-visible{color:#fff;outline:none}
 .chip{display:inline-block;margin-top:.3em;padding:.1em .7em;border-radius:6px;background:var(--panel2);
   border:1px solid var(--rule);font-size:.82em;color:#c9d4e8;font-variant-numeric:tabular-nums}
 .stops{list-style:none;margin:0;padding:0;display:grid;gap:.22em;min-width:0}
@@ -108,6 +114,7 @@ main{flex:1;display:flex;flex-direction:column;padding:0 clamp(16px,2.2vw,44px);
 @keyframes ebp{50%{box-shadow:0 0 0 4px rgba(255,77,97,.28)}}
 @media (prefers-reduced-motion:reduce){.eb2.late{animation:none}}
 .chip.wh{background:rgba(74,168,255,.2);color:#8fcbff;font-weight:700}
+.chip.qa{background:rgba(167,139,250,.22);color:#d4c6ff;font-weight:700}
 /* จุดส่งบนเส้นทาง: ใหญ่และตัวเลขสีขาวบนพื้นทึบ ให้อ่านได้จากระยะไกล */
 .dot{position:absolute;z-index:1;top:calc(var(--ly) + 1px);left:calc(var(--q) * 100%);transform:translate(-50%,-50%);
   font-size:.92em;width:1.7em;height:1.7em;border-width:3px;box-shadow:0 0 0 3px var(--bg)}
@@ -207,6 +214,13 @@ dialog::backdrop{background:rgba(3,6,14,.72)}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:.5em}
 .thumbs a{display:block;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--panel2);border:1px solid var(--rule)}
 .thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+.thumbs .tb{position:relative}
+.thumbs .phx{position:absolute;top:4px;right:4px;min-width:26px;height:26px;padding:0 .45em;border-radius:13px;border:1px solid rgba(255,255,255,.55);
+  background:rgba(8,12,24,.78);color:#fff;font:700 13px/24px inherit;cursor:pointer}
+.thumbs .phx:hover,.thumbs .phx:focus-visible{background:var(--late);outline:none}
+.thumbs .phx.arm{background:var(--late);border-color:var(--late)}
+.log h4{margin:.7em 0 .2em;font-size:.95em;display:flex;gap:.5em;align-items:baseline;flex-wrap:wrap}
+.log h4 .t{font-weight:400}
 .badge{display:inline-block;padding:.05em .7em;border-radius:999px;background:var(--c);color:#08101f;font-weight:700;font-size:.85em}
 
 @keyframes blink{50%{opacity:.15}}
@@ -244,6 +258,7 @@ dialog::backdrop{background:rgba(3,6,14,.72)}
     <a class="nav" href="dashboard.html">วันนี้</a>
     <a class="nav" id="qrLink" href="qr.html">QR</a>
     <a class="nav" id="routeLink" href="route.html" title="ดูแผนงานของวันนี้บนแผนที่ (วางแผนจัดส่ง)">Route Plan</a>
+    <a class="nav" href="gps.html" title="ภาพรวมรถทุกคันบนแผนที่ + Delay Trend">Summary</a>
     <button class="nav" id="newTask" type="button" hidden>+ สร้างงาน</button>
     <span class="user" id="userBox"></span>
     <input class="datepick" id="datepick" type="date" aria-label="เลือกวันที่">
@@ -563,12 +578,13 @@ function render() {
       }).join('') + (x.rt ? `<li class="${cls(x.ns)}" data-code="${esc(t.taskCode)}"><span class="num">${x.done[x.ns] ? '✓' : '↩'}</span><b></b>
           <span class="nm">กลับ ${esc(CFG.ORIGIN || 'ต้นทาง')} (ไป-กลับ)</span>${x.done[x.ns] ? `<span class="act">ถึง ${hhmm(x.done[x.ns])}</span>` : ''}</li>` : '');
       const chips = [t.taskCode, t.client, t.round, t.vehicleType, t.plate].filter(Boolean).map(c => `<span class="chip">${esc(c)}</span>`).join('')
-        + ((t.pickupRows || []).some(r => r.source !== 'GPS') ? ' <span class="chip wh" title="คลังสินค้าอัปโหลดรูปแล้ว">📦 มีรูปจากคลังสินค้าแล้ว</span>' : '');
+        + (deptRows(t, 'WH').length ? ' <span class="chip wh" title="คลังสินค้า (WH) อัปโหลดรูปแล้ว">📦 รูปจาก WH</span>' : '')
+        + (deptRows(t, 'QA').length ? ' <span class="chip qa" title="ประกันคุณภาพ (QA) อัปโหลดรูปแล้ว">🔍 รูปจาก QA</span>' : '');
       const flagTxt = showCx ? 'CANCELED' : x.flag === 'delay' ? 'DELAY' : x.flag === 'follow' ? 'FOLLOW' : '';
       // รถยังอยู่ใกล้จุดเริ่มต้น: รวมสถานะไว้บรรทัดเดียวกับ "รถเข้า" เพื่อไม่ให้ข้อความซ้อนกัน
       const stat = `${x.label}${x.when ? ' ' + hhmm(x.when) : ''}${srcTag(x.src)}`, near = x.s !== 'waiting' && x.p < .3;
       return `<article class="row s-${x.s} ${showCx ? 'cx' : ''} ${x.flag ? 'flag ' + (x.flag === 'delay' ? 'late' : 'follow') : ''} ${x.checkin ? 'in' : ''} ${i >= 3 ? 'up' : ''} ${side}" style="--p:${x.p}">
-        <div class="pick"><div class="time">${esc(shortT(t.pickup))}<span>${esc(CFG.ORIGIN || '')}</span></div>${chips}</div>
+        <div class="pick"><div class="time">${esc(shortT(t.pickup))}<span>${esc(CFG.ORIGIN || '')}</span>${t.company ? `<span class="co" title="ชื่อบริษัทขนส่ง : ${esc(t.company)}">${coHtml(t.company)}</span>` : ''}</div>${chips}</div>
         <div class="track"><div class="line"></div>${dots}
           <div class="origin">${x.checkin ? 'รถเข้า ' + hhmm(x.checkin) + srcTag(x.ckSrc) : 'รถยังไม่เข้า'}${near ? ` <b>· ${stat}</b>` : ''}</div>
           <div class="mover" data-flag="${flagTxt}">
@@ -591,6 +607,9 @@ function render() {
   }
 }
 
+// ชื่อบริษัทขนส่ง : ส่วนที่เป็นลิงก์ (http/https) กดเปิดแท็บใหม่ได้ แสดงแบบไม่มี https://
+const coHtml = v => String(v || '').split(/(https?:\/\/[^\s]+)/i).map((x, i) => i % 2
+  ? `<a href="${esc(x)}" target="_blank" rel="noopener" title="${esc(x)}">🔗 ${esc(x.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))}</a>` : esc(x)).join('');
 const mapHtml = m => !m ? '-' : /^https?:\/\//i.test(m) ? `<a href="${esc(m)}" target="_blank" rel="noopener">${esc(m)}</a>` : esc(m);
 const eb2 = (st, ic) => `<span class="eb2 ${st}" title="${ic === '📡' ? 'ประเมินจาก GPS' : 'จากเวลาที่ผู้จัดส่งแจ้ง'}">${ic} ${ETA_TH[st]}</span>`;
 const flagColor = x => x.flag === 'delay' ? 'late' : x.flag === 'follow' ? 'follow' : x.s;
@@ -624,8 +643,12 @@ function turn(step) {
 /* ---------- รายละเอียด ---------- */
 // รูปอยู่ในที่เก็บรูปแบบไม่เปิดสาธารณะ : ขอลิงก์ชั่วคราว (1 ชม.) แล้วจึงแสดง จำลิงก์ไว้ 50 นาทีเพื่อไม่ต้องขอซ้ำทุกครั้งที่หน้าจออัปเดต
 const photoUrl = new Map();
+// admin เห็นปุ่ม × ลบรูปทีละรูป (กด 2 ครั้งเพื่อยืนยัน)
 const thumbs = ids => ids && ids.length ? `<div class="thumbs">${ids.map(id => { const u = photoUrl.get(id);
-  return `<a data-p="${esc(id)}" ${u ? `href="${esc(u.url)}"` : ''} target="_blank" rel="noopener"><img loading="lazy" alt="รูป" ${u ? `src="${esc(u.url)}"` : ''}></a>`; }).join('')}</div>` : '';
+  return `<div class="tb"><a data-p="${esc(id)}" ${u ? `href="${esc(u.url)}"` : ''} target="_blank" rel="noopener"><img loading="lazy" alt="รูป" ${u ? `src="${esc(u.url)}"` : ''}></a>`
+    + (Auth.isAdmin() && !DEMO ? `<button type="button" class="phx" data-del="${esc(id)}" title="ลบรูปนี้ (เฉพาะผู้ดูแล)" aria-label="ลบรูปนี้">×</button>` : '') + `</div>`; }).join('')}</div>` : '';
+// รูปส่งงานแยกฝ่าย : WH = คลังสินค้า (pickup.html), QA = ประกันคุณภาพ (qa.html)
+const deptRows = (t, d) => (t.pickupRows || []).filter(r => r.source !== 'GPS' && (r.dept || 'WH') === d);
 async function fillPhotos() {
   const now = Date.now();
   photoUrl.forEach((v, k) => { if (now - v.at > 50 * 60e3) photoUrl.delete(k); });
@@ -665,19 +688,22 @@ function openDetail(code) {
         ${x.arrive[k] ? ' ' + arrBadge(x.arrive[k], sp.arrival ? planTimes(t)[k + 1] : null) : ''}
         <br><span style="color:var(--muted)">แผนที่:</span> ${mapHtml(sp.map)} <span style="color:var(--muted)">· ผู้รับ:</span> ${esc(sp.receiver || '-')}</dd>`).join('')}
       ${x.rt ? `<dt>กลับ ${esc(CFG.ORIGIN || 'ต้นทาง')}</dt><dd>${x.done[x.ns] ? `<span style="color:var(--arrived)">✓ กลับถึงแล้ว ${hhmm(x.done[x.ns])}</span>` : 'ยังไม่กลับถึง (รอบไป-กลับ)'}</dd>` : ''}
-      <dt>รถขนส่ง</dt><dd>${esc(t.transport || '-')}</dd><dt>บริษัทขนส่ง</dt><dd>${esc(t.company || '-')}</dd>
+      <dt>รถขนส่ง</dt><dd>${esc(t.transport || '-')}</dd><dt>บริษัทขนส่ง</dt><dd>${t.company ? coHtml(t.company) : '-'}</dd>
       <dt>ประเภทรถ</dt><dd>${esc(t.vehicleType || '-')}</dd><dt>ทะเบียนรถ</dt><dd>${esc(t.plate || '-')}</dd>
       <dt>ผู้ขับ</dt><dd>${esc(t.driver || '-')}</dd>
       <dt>เบอร์โทร</dt><dd>${t.phone ? `<a style="color:var(--departed)" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : '-'}</dd>
     </dl>`;
-  h += `<div class="log"><h3>อัปโหลดรูปส่งงาน</h3>`;
-  const pr = (t.pickupRows || []).filter(r => r.source !== 'GPS');
-  if (pr.length) {
-    const lastP = pr[pr.length - 1], closeAt = new Date(new Date(lastP.time).getTime() + 864e5);
-    h += `<div class="t">อัปโหลด ${pr.length} ครั้ง · ` + (Date.now() > closeAt ? 'ปิดรับรูปแล้ว' : 'เปิดรับรูปถึง ' + hhmm(closeAt.toISOString()) + ' น.') + `</div>`;
-    pr.forEach(r => { h += `<div style="margin-bottom:.6em"><div class="t">${hhmm(r.time)} น.${srcTag(r.source || 'คน')}</div>${r.note ? `<p>${esc(r.note)}</p>` : ''}${thumbs(r.photos)}</div>`; });
-  } else h += `<div class="t">ยังไม่มีข้อมูล</div>`;
-  h += `</div><div class="log"><h3>ข้อมูลจากผู้จัดส่ง</h3>`;
+  [['WH', 'รูปจาก WH (คลังสินค้า)'], ['QA', 'รูปจาก QA (ประกันคุณภาพ)']].forEach(([d, title]) => {
+    const pr = deptRows(t, d), n = pr.reduce((a, r) => a + (r.photos || []).length, 0);
+    h += `<div class="log"><h3>${title}</h3>`;
+    if (pr.length) {
+      const lastP = pr[pr.length - 1], closeAt = new Date(new Date(lastP.time).getTime() + 864e5);
+      h += `<div class="t">อัปโหลด ${pr.length} ครั้ง · รูปรวม ${n}/20 · ` + (Date.now() > closeAt ? 'ปิดรับรูปแล้ว' : 'เปิดรับรูปถึง ' + hhmm(closeAt.toISOString()) + ' น.') + `</div>`;
+      pr.forEach(r => { h += `<div style="margin-bottom:.6em"><div class="t">${hhmm(r.time)} น.${srcTag(r.source || 'คน')}</div>${r.note ? `<p>${esc(r.note)}</p>` : ''}${thumbs(r.photos)}</div>`; });
+    } else h += `<div class="t">ยังไม่มีข้อมูล</div>`;
+    h += `</div>`;
+  });
+  h += `<div class="log"><h3>ข้อมูลจากผู้จัดส่ง</h3>`;
   if (!(t.logs || []).length) h += `<div class="t">ยังไม่มีข้อมูล</div>`;
   (t.logs || []).slice().reverse().forEach(l => {
     const eta = (l.eta || []).map((v, i) => v ? `จุด ${i + 1} ${v}` : '').filter(Boolean).join(', ');
@@ -796,6 +822,28 @@ $('dlgCancel').onclick = () => {
     finally { $('dlgCancel').disabled = false; }
   });
 };
+
+/* ลบรูปทีละรูป (เฉพาะ admin) : กด × แล้วกดซ้ำเพื่อยืนยัน -> เอารูปออกจาก Log (บันทึกประวัติ) แล้วลบไฟล์ในที่เก็บรูป */
+$('dlgBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  e.preventDefault();
+  const path = b.dataset.del, code = openCode;
+  confirmTwice(b, 'ลบ?', async () => {
+    b.disabled = true; $('actMsg').textContent = 'กำลังลบรูป…';
+    try {
+      await Auth.rpc('photo_remove', { p_code: code, p_path: path });
+      let note = '';
+      try { await Auth.removePhotos([path]); } catch (x) { note = ' (ลบไฟล์ในที่เก็บรูปไม่สำเร็จ กรุณาลบเองที่ Supabase > Storage)'; }
+      const t = tasks.find(x => x.taskCode === code);
+      if (t) {
+        (t.pickupRows || []).forEach(r => { r.photos = (r.photos || []).filter(x => x !== path); });
+        (t.logs || []).forEach(l => { l.road = (l.road || []).filter(x => x !== path); l.unload = (l.unload || []).filter(x => x !== path); });
+      }
+      if ($('dlg').open && openCode === code && !editing) openDetail(code);
+      $('actMsg').textContent = 'ลบรูปแล้ว' + note;
+    } catch (x) { b.disabled = false; $('actMsg').textContent = 'ลบรูปไม่สำเร็จ: ' + actErr(x); }
+  });
+});
 
 /* ลบงาน (เฉพาะ admin) : ลบแผน + Log + รูปของงานนั้น (กู้คืนไม่ได้) งานที่ยกเลิกแล้วลบไม่ได้ */
 $('dlgDel').onclick = () => {

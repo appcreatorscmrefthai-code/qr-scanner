@@ -13,7 +13,7 @@
 <style>
 /* รูปแบบตามไฟล์ QR_Forms_Sample_2.docx : ฟอนต์ Tahoma ขอบกระดาษ 10 มม.
    รายงานคนขับ    : 1 งาน = 1 หน้า A4 ตัดได้ 4 ชิ้น (ส่วนหัว + จุดส่ง 3 ช่อง)
-   รายงานคลังสินค้า : 3 งาน = 1 หน้า A4 ตัดได้ 3 ชิ้น
+   รายงาน WH / QA  : 3 งาน = 1 หน้า A4 ตัดได้ 3 ชิ้น (QR ซ้าย = WH คลังสินค้า, QR ขวา = QA ประกันคุณภาพ)
    ขอบ @page = 0 เพื่อไม่ให้เบราว์เซอร์พิมพ์ชื่อหน้า/ที่อยู่เว็บ แล้วพิมพ์เฉพาะวันที่ (บนซ้าย) กับเลขหน้า (ล่างขวา) เอง */
 @page{size:A4 portrait;margin:0}
 *{box-sizing:border-box}
@@ -77,11 +77,14 @@ table.docs col.c{width:23%}
 table.docs td.c{text-align:center;font-size:11pt;line-height:1}
 .drv-stop .rmk{margin-top:1.5mm;height:7mm;border:1px solid #000;padding:.4mm 1.5mm;font-size:10pt;font-weight:700}
 
-/* ---- รายงานคลังสินค้า : 3 ชิ้น ---- */
+/* ---- รายงาน WH / QA : 3 ชิ้น  [QR WH] [ข้อมูลงาน] [QR QA] ---- */
 .wh{flex:1 1 0;--q:29.9mm}
 .wh + .wh{padding-top:4mm}
-.wh .cols{display:grid;grid-template-columns:1fr auto;column-gap:6mm;align-items:start;margin-top:1mm}
-.wh .qr{margin:1mm 8mm 0 0}
+.wh .ref strong,.wh .ref span{display:inline}.wh .ref span{margin-left:2.5mm}     /* Task Code กับวันที่อยู่บรรทัดเดียวกัน */
+.wh .cols{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:6mm;align-items:start;margin-top:1.5mm}
+.wh figure{margin:1mm 0 0;text-align:center}
+.wh figcaption{font-size:12pt;font-weight:700;line-height:1.3;margin-top:.5mm}
+.wh.f1 .txt{font-size:10pt;line-height:1.4}.wh.f1 .big{font-size:13pt;margin-top:1mm}
 
 @media screen and (max-width:760px){#pages{zoom:.48}}
 @media print{
@@ -98,7 +101,7 @@ table.docs td.c{text-align:center;font-size:11pt;line-height:1}
   <span>วันที่</span><input type="date" id="date" class="datebox" aria-label="เลือกวันที่">
   <div class="kind" role="radiogroup" aria-label="ชนิดฟอร์ม">
     <label><input type="radio" name="kind" value="driver" checked>รายงานคนขับ</label>
-    <label><input type="radio" name="kind" value="wh">รายงานคลังสินค้า</label>
+    <label><input type="radio" name="kind" value="wh">รายงาน WH / QA</label>
     <label><input type="radio" name="kind" value="both">ทั้ง 2 รายงาน</label>
   </div>
   <button id="printBtn" disabled>พิมพ์</button>
@@ -111,7 +114,7 @@ table.docs td.c{text-align:center;font-size:11pt;line-height:1}
 <script src="api.js"></script>
 <script src="auth.js"></script>
 <script>
-// QR ประจำงาน: สแกนแล้วเข้าหน้าของงานนั้นทันที  1 งานมี 2 รายงาน (คนขับ / คลังสินค้า) เลือกชนิดก่อนพิมพ์
+// QR ประจำงาน: สแกนแล้วเข้าหน้าของงานนั้นทันที  1 งานมี 2 รายงาน (คนขับ / WH และ QA) เลือกชนิดก่อนพิมพ์
 const CFG = window.APP_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -168,18 +171,22 @@ function driverPage(t) {
     ${slot(0)}${slot(1)}${slot(2)}`);
 }
 
-// รายงานที่ 2 : คลังสินค้า  งานละ 1/3 หน้า (1 หน้าตัดได้ 3 ชิ้น) QR อยู่ด้านขวา
+// รายงานที่ 2 : WH และ QA  งานละ 1/3 หน้า (1 หน้าตัดได้ 3 ชิ้น) QR ซ้าย = WH (pickup.html), QR ขวา = QA (qa.html)
 function whPiece(t) {
   if (!t) return '<div class="piece wh"></div>';
   return `<div class="piece wh">
-    ${head('สำหรับคลังสินค้า', `อัปโหลดรูปส่งงานหลังรถออกจาก ${esc(ORIGIN)} ทันที`, t)}
+    ${head('สำหรับ WH และ QA', `อัปโหลดรูปส่งงานหลังรถออกจาก ${esc(ORIGIN)} ทันที`, t)}
     <div class="big">${join([t.vehicleType, t.plate ? 'ทะเบียน ' + t.plate : '', t.driver ? 'ผู้ขับ ' + t.driver : ''])}</div>
-    <div class="cols"><div>
-      <div class="txt">บริษัทขนส่ง : ${esc(t.company || '-')}</div>
-      <div class="txt"><u>หมายเหตุ : ${esc(t.transport || '-')}</u></div>
-      <div class="lbl" style="margin-top:1.5mm">จุดส่ง</div>
-      ${(t.stops || []).slice(0, 3).map((s, k) => `<div class="txt">${k + 1}) ${esc(s.name)}${s.arrival ? ` <u>(เวลาถึงหน้างาน ${esc(s.arrival)})</u>` : ''}</div>`).join('')}
-    </div>${qrBox('pickup.html', t)}</div>
+    <div class="cols">
+      <figure>${qrBox('pickup.html', t)}<figcaption>WH</figcaption></figure>
+      <div>
+        <div class="txt">บริษัทขนส่ง : ${esc(t.company || '-')}</div>
+        <div class="txt"><u>หมายเหตุ : ${esc(t.transport || '-')}</u></div>
+        <div class="lbl" style="margin-top:1.5mm">จุดส่ง</div>
+        ${(t.stops || []).slice(0, 3).map((s, k) => `<div class="txt">${k + 1}) ${esc(s.name)}${s.arrival ? ` <u>(เวลาถึงหน้างาน ${esc(s.arrival)})</u>` : ''}</div>`).join('')}
+      </div>
+      <figure>${qrBox('qa.html', t)}<figcaption>QA</figcaption></figure>
+    </div>
   </div>`;
 }
 
@@ -192,9 +199,9 @@ function draw() {
   $('pages').innerHTML = html;
   pending.forEach(([id, text]) => new QRCode($(id), { text, width: 360, height: 360, correctLevel: QRCode.CorrectLevel.M }));
   stampPages(); fitMain();
-  const name = { driver: 'รายงานคนขับ (1 งานต่อหน้า ตัด 4 ชิ้น)', wh: 'รายงานคลังสินค้า (3 งานต่อหน้า ตัด 3 ชิ้น)', both: 'ทั้ง 2 รายงาน' }[k];
+  const name = { driver: 'รายงานคนขับ (1 งานต่อหน้า ตัด 4 ชิ้น)', wh: 'รายงาน WH / QA (3 งานต่อหน้า ตัด 3 ชิ้น)', both: 'ทั้ง 2 รายงาน' }[k];
   $('info').textContent = tasks.length ? `${tasks.length} งาน · ${name} · ${pages} หน้า A4 แนวตั้ง` : 'ไม่มีแผนจัดส่งของวันที่เลือก';
-  $('printBtn').disabled = !tasks.length; $('printBtn').textContent = 'พิมพ์' + ({ driver: 'รายงานคนขับ', wh: 'รายงานคลังสินค้า', both: 'ทั้ง 2 รายงาน' }[k]);
+  $('printBtn').disabled = !tasks.length; $('printBtn').textContent = 'พิมพ์' + ({ driver: 'รายงานคนขับ', wh: 'รายงาน WH / QA', both: 'ทั้ง 2 รายงาน' }[k]);
 }
 // ชิ้นบนของรายงานคนขับต้องจบในชิ้นเดียว : ถ้าล้นให้ย่อทีละขั้น (f1 ตัวเล็กลง → f2 ซ่อนผู้รับ (มีในชิ้นจุดส่งแล้ว) → f3 เวลานัดต่อท้ายบรรทัด)
 function fitMain() {
@@ -202,15 +209,16 @@ function fitMain() {
     m.classList.remove('f1', 'f2', 'f3');
     for (let i = 1; i <= 3 && m.scrollHeight > m.clientHeight + 1; i++) m.classList.add('f' + i);
   });
+  document.querySelectorAll('.wh').forEach(m => { m.classList.remove('f1'); if (m.scrollHeight > m.clientHeight + 1) m.classList.add('f1'); });   // ชิ้น WH/QA ข้อมูลเยอะ : ตัวเล็กลง
 }
 if (document.fonts) document.fonts.ready.then(fitMain);
 window.addEventListener('beforeprint', stampPages);
 window.addEventListener('beforeprint', fitMain);
-// ชื่อไฟล์ตอนบันทึกเป็น PDF = ชื่อหน้า (title) ขณะสั่งพิมพ์ : QR คนขับ / QR คลังสินค้า / QR รวม + วันที่เวลาที่พิมพ์ เช่น QR คนขับ 20261013 1551
+// ชื่อไฟล์ตอนบันทึกเป็น PDF = ชื่อหน้า (title) ขณะสั่งพิมพ์ : QR คนขับ / QR WH และ QA / QR รวม + วันที่เวลาที่พิมพ์ เช่น QR คนขับ 20261013 1551
 const baseTitle = document.title;
 function printTitle() {
   const d = new Date(), p = n => String(n).padStart(2, '0');
-  return `${{ driver: 'QR คนขับ', wh: 'QR คลังสินค้า', both: 'QR รวม' }[kind()]} ${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())} ${p(d.getHours())}${p(d.getMinutes())}`;
+  return `${{ driver: 'QR คนขับ', wh: 'QR WH และ QA', both: 'QR รวม' }[kind()]} ${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())} ${p(d.getHours())}${p(d.getMinutes())}`;
 }
 window.addEventListener('beforeprint', () => { document.title = printTitle(); });
 window.addEventListener('afterprint', () => { document.title = baseTitle; });

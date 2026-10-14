@@ -1,4 +1,4 @@
-/* ส่วนที่ใช้ร่วมกันของ pickup.html และ road.html */
+/* ส่วนที่ใช้ร่วมกันของ pickup.html (WH), qa.html (QA), road.html และ road-gps.html */
 (function () {
   const CFG = window.APP_CONFIG || {};
   const DEMO = !SB.ON;
@@ -217,19 +217,26 @@
     return items.filter(it => it.state === 'done');
   }
 
-  /* ---------- ตัวเลือกรูป ---------- */
+  /* ---------- ตัวเลือกรูป ----------
+     p.max = จำนวนรูปสูงสุดของส่วนนั้น "รวมทุกครั้งที่ส่ง" (setSent บอกจำนวนที่ส่งไปแล้ว) ; p.perSend = นับเฉพาะต่อครั้ง (รูปสถานการณ์บนถนน) */
   function makePicker(p) {
     const items = [], root = $(p.el);
-    let seq = 0;
-    root.innerHTML = `<label class="btn pick">+ เพิ่มรูป<input type="file" accept="image/*" multiple></label>
+    let seq = 0, sent = 0;
+    root.innerHTML = `<label class="btn pick"><span>+ เพิ่มรูป</span><input type="file" accept="image/*" multiple></label>
       <div class="grid"></div><div class="meter"></div>`;
-    const input = root.querySelector('input'), grid = root.querySelector('.grid'), meter = root.querySelector('.meter');
+    const lab = root.querySelector('label'), input = root.querySelector('input'), grid = root.querySelector('.grid'), meter = root.querySelector('.meter');
     const total = () => items.reduce((s, x) => s + x.blob.size, 0);
+    const room = () => p.max - items.length - (p.perSend ? 0 : sent);       // เลือกเพิ่มได้อีกกี่รูป
     const MARK = { wait: '…', up: '↑', done: '✓', err: '!' };
     function draw() {
       grid.innerHTML = items.map((x, i) => `<div class="ph s-${x.state}"><img alt="รูปที่ ${i + 1}" src="${x.url}"><i>${MARK[x.state] || ''}</i><button type="button" data-i="${i}" aria-label="ลบรูปที่ ${i + 1}">×</button></div>`).join('');
-      const sent = items.filter(x => x.state === 'done').length;
-      meter.textContent = `${items.length}/${p.max} รูป · ${(total() / MB).toFixed(1)}/${p.maxMB} MB` + (items.length ? ` · ส่งแล้ว ${sent}/${items.length}` : '');
+      const up = items.filter(x => x.state === 'done').length, left = Math.max(0, room());
+      meter.textContent = (p.perSend ? [`ครั้งนี้ ${items.length}/${p.max} รูป`]
+        : [`ส่งแล้ว ${sent}/${p.max} รูป`, items.length ? `เลือกใหม่ ${items.length} รูป` : '', `เพิ่มได้อีก ${left} รูป`])
+        .concat(items.length ? [`${(total() / MB).toFixed(1)}/${p.maxMB} MB`, `อัปโหลดแล้ว ${up}/${items.length}`] : []).filter(Boolean).join(' · ');
+      const full = left <= 0;
+      input.disabled = full; lab.classList.toggle('off', full);
+      lab.firstElementChild.textContent = !full ? '+ เพิ่มรูป' : p.perSend ? `เลือกครบ ${p.max} รูปแล้ว` : items.length ? `เลือกครบ ${p.max} รูปแล้ว` : `ส่งครบ ${p.max} รูปแล้ว`;
     }
     watchers.add(draw);
     grid.onclick = e => {
@@ -241,7 +248,7 @@
       say('');
       const skipped = [], ctx = p.context();          // { taskCode, stop } ณ ตอนที่เลือกรูป
       for (const f of files) {
-        if (items.length >= p.max) { skipped.push(`เกิน ${p.max} รูป`); break; }
+        if (room() <= 0) { skipped.push(p.perSend ? `เกิน ${p.max} รูปต่อครั้ง` : `รวมเกิน ${p.max} รูป (ส่งแล้ว ${sent} รูป)`); break; }
         try {
           meter.textContent = 'กำลังเตรียมรูป…';
           const blob = await shrink(f);
@@ -257,7 +264,48 @@
     draw();
     // take(): ย้ายรูปทั้งหมดออกจากตัวเลือก (หลังกดบันทึก) เพื่อให้ผู้ใช้เลือกรูปชุดถัดไปได้ทันที
     return { items, kind: p.kind, key: p.key, root, take() { const a = items.splice(0); draw(); return a; },
-      clear() { items.splice(0).forEach(x => URL.revokeObjectURL(x.url)); draw(); } };
+      clear() { items.splice(0).forEach(x => URL.revokeObjectURL(x.url)); draw(); },
+      setSent(n) { n = Number(n) || 0; if (n !== sent) { sent = n; draw(); } }, get sent() { return sent; }, get room() { return room(); } };
+  }
+
+  /* ---------- รูปที่ส่งแล้ว (ดูได้อย่างเดียว ลบไม่ได้) ----------
+     ที่เก็บรูปไม่เปิดสาธารณะ : ขอลิงก์ชั่วคราว 1 ชม. (ระบบให้เฉพาะงานที่ยังอยู่ในช่วงเปิดฟอร์ม) จำไว้ 50 นาที */
+  const signed = new Map();
+  async function signUrls(paths) {
+    const now = Date.now(), need = [...new Set(paths)].filter(x => { const c = signed.get(x); return !c || now - c.at > 50 * 60e3; });
+    if (need.length && !DEMO) {
+      try {
+        const rows = await SB.call('/storage/v1/object/sign/photos', { body: { expiresIn: 3600, paths: need } });
+        (rows || []).forEach(r => { const u = r.signedURL || r.signedUrl; if (u && !r.error) signed.set(r.path, { url: SB.URL + '/storage/v1' + u, at: Date.now() }); });
+      } catch (e) { }
+    }
+    return signed;
+  }
+  // groups = [{ label, paths, max }] แสดงเฉพาะกลุ่มที่มีรูป คืนจำนวนกลุ่มที่แสดง
+  function sentBox(el, groups) {
+    const box = typeof el === 'string' ? $(el) : el;
+    const gs = (groups || []).filter(g => g.paths && g.paths.length);
+    if (!box) return gs.length;
+    const key = JSON.stringify(gs.map(g => [g.label, g.max, g.paths]));
+    if (box.dataset.key === key) return gs.length;              // ไม่เปลี่ยน ไม่ต้องวาดใหม่ (หน้าโหลดสถานะซ้ำทุก 30 วินาที)
+    box.dataset.key = key;
+    box.innerHTML = gs.map(g => `<div class="sg"><span>${esc(g.label)}</span><b>${g.max ? `ส่งแล้ว ${g.paths.length}/${g.max}` : g.paths.length} รูป</b></div>
+      <div class="grid">${g.paths.map((x, i) => `<a class="ph" data-p="${esc(x)}" target="_blank" rel="noopener"><img alt="${esc(g.label)} รูปที่ ${i + 1}"></a>`).join('')}</div>`).join('')
+      + (gs.length ? '<div class="meter">รูปที่ส่งแล้วดูได้อย่างเดียว ลบหรือแก้ไขไม่ได้ ถ้าส่งผิดกรุณาแจ้งผู้ดูแลระบบ</div>' : '');
+    const all = gs.flatMap(g => g.paths);
+    if (all.length) signUrls(all).then(c => box.querySelectorAll('a[data-p]').forEach(a => {
+      const u = c.get(a.dataset.p); if (u) { a.href = u.url; a.firstElementChild.src = u.url; }
+    }));
+    return gs.length;
+  }
+  // รูปลงงานของจุด (stop = 0 : รูปตอนรถกลับถึงต้นทาง) รวมทุกครั้ง
+  const stopPhotos = (t, stop) => (t.logs || []).filter(l => stop ? l.stop === stop && (l.type === 'arrive' || l.type === 'unload') : l.type === 'return').flatMap(l => l.unload || []);
+  const MAX_STOP = 20;
+  function photoGroups(t) {
+    const g = [{ label: 'สถานการณ์บนถนน', paths: (t.logs || []).flatMap(l => l.road || []) }];
+    (t.stops || []).forEach((st, i) => g.push({ label: `จุดที่ ${i + 1} ${st.name}`, paths: stopPhotos(t, i + 1), max: MAX_STOP }));
+    if (t.roundTrip) g.push({ label: 'รูปตอนรถกลับถึง SCM', paths: stopPhotos(t, 0), max: MAX_STOP });
+    return g;
   }
 
   /* ---------- บันทึกรายการก่อน แล้วแนบรูปที่ยังส่งไม่เสร็จตามไป ----------
@@ -328,5 +376,5 @@
   // ผู้ให้บริการขนส่งที่ใช้ฟอร์มแบบ GPS (ตัดช่องว่างก่อนเทียบ)
   const isGpsCompany = c => String(c || '').replace(/\s+/g, '').includes('ปทุมทรานสปอร์ต');
   window.DF = { CFG, isGpsCompany, DEMO, $, esc, hhmm, fmt, apiGet, apiPost, retry, say, toast, confirmBox, startScan, parseCode,
-    makePicker, submitWithPhotos, warm, apply, normPlate, taskCard, clock, param: k => new URLSearchParams(location.search).get(k) };
+    makePicker, submitWithPhotos, warm, apply, normPlate, taskCard, clock, sentBox, signUrls, stopPhotos, photoGroups, MAX_STOP, param: k => new URLSearchParams(location.search).get(k) };
 })();

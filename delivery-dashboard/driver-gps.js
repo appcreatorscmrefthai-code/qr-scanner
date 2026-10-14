@@ -4,8 +4,8 @@
   const { $, esc, hhmm } = DF;
   let task = null, chain = Promise.resolve(), pending = 0, gen = 0;
   const ctx = () => ({ taskCode: task && task.taskCode, stop: Number($('photoTarget').value) || 0 });
-  const pkRoad = DF.makePicker({ key: 'road', kind: 'road', el: 'pkRoad', max: 5, maxMB: 5, label: 'รูปสถานการณ์บนถนน', context: () => ({ taskCode: task && task.taskCode, stop: 0 }) });
-  const pkUnload = DF.makePicker({ key: 'unload', kind: 'unload', el: 'pkUnload', max: 20, maxMB: 50, label: 'รูปลงงาน', context: ctx });
+  const pkRoad = DF.makePicker({ key: 'road', kind: 'road', el: 'pkRoad', max: 5, maxMB: 5, perSend: true, label: 'รูปสถานการณ์บนถนน', context: () => ({ taskCode: task && task.taskCode, stop: 0 }) });
+  const pkUnload = DF.makePicker({ key: 'unload', kind: 'unload', el: 'pkUnload', max: DF.MAX_STOP, maxMB: 50, label: 'รูปลงงาน', context: ctx });
   const show = (id, on) => { $(id).hidden = !on; };
   const nextStop = () => task.state.done.findIndex(d => !d);
   const addH = (iso, h) => iso ? new Date(new Date(iso).getTime() + h * 3600e3).toISOString() : '';
@@ -40,6 +40,7 @@
     const back = allDone && task.roundTrip && !s.returned, fin = allDone && !back;
     const atSite = !allDone && !!s.arrive[k];
     $('taskBox').innerHTML = DF.taskCard(task);
+    show('sentCard', DF.sentBox('sentBox', DF.photoGroups(task)) > 0);        // รูปที่ส่งแล้ว (ดูอย่างเดียว)
 
     const lines = [row('1. รถเข้า SCM', s.checkin && s.checkin.time, srcOf('checkin')), row('2. รถออกจาก SCM', s.depart, srcOf('depart'))];
     const hr = s.depart ? addH(s.depart, 1) : '';
@@ -64,13 +65,15 @@
       if (ref) opts.push({ v: i + 1, t: `จุดที่ ${i + 1} ${st.name}`, ref, ok: now - new Date(ref).getTime() <= H24 });
     });
     if (task.roundTrip && s.returned) opts.push({ v: 0, t: 'รถกลับถึง SCM', ref: s.returned, ok: now - new Date(s.returned).getTime() <= H24 });
+    opts.forEach(o => { o.n = DF.stopPhotos(task, o.v).length; });
     const sel = $('photoTarget'), cur = sel.value;
-    sel.innerHTML = opts.map(o => `<option value="${o.v}"${o.ok ? '' : ' disabled'}>${esc(o.t)}${o.ok ? '' : ' (ปิดรับรูปแล้ว)'}</option>`).join('');
+    sel.innerHTML = opts.map(o => `<option value="${o.v}"${o.ok ? '' : ' disabled'}>${esc(o.t)} · ส่งแล้ว ${o.n}/${DF.MAX_STOP} รูป${o.ok ? '' : ' (ปิดรับรูปแล้ว)'}</option>`).join('');
     const okOpts = opts.filter(o => o.ok);
     if (okOpts.some(o => String(o.v) === cur)) sel.value = cur; else if (okOpts.length) sel.value = String(okOpts[okOpts.length - 1].v);
     show('s3', opts.length > 0);
     $('unloadBtn').disabled = !okOpts.length;
     const cs = okOpts.find(o => String(o.v) === sel.value);
+    pkUnload.setSent(cs ? cs.n : 0);
     $('photoOpen').textContent = cs ? `ถึง/เสร็จเมื่อ ${hhmm(cs.ref)} น. · แนบรูปได้ถึง ${new Date(addH(cs.ref, 24)).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })} น.` : 'ทุกจุดเกิน 24 ชม. แล้ว ปิดรับรูป';
   }
 
@@ -85,6 +88,7 @@
     chain = job.then(d => {
       pending--; showSync(`บันทึกเข้าระบบแล้ว ${hhmm(d.time)} น. (${((Date.now() - t0) / 1000).toFixed(1)} วินาที)`);
       if (!pending) load(code, true);
+      if (d.photos) d.photos.then(() => { if (!pending) load(code, true); });      // รูปที่แนบตามไปส่งครบแล้ว : อัปเดตรูปที่ส่งแล้ว
     }, async e => {
       pending--; showSync('');
       DF.say('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' กรุณาตรวจอินเทอร์เน็ตแล้วกดอีกครั้ง');

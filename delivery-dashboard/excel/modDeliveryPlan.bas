@@ -3,7 +3,7 @@ Option Explicit
 
 ' ============================================================================
 '  Delivery Plan : ปุ่มใน Excel สำหรับส่งแผนขึ้นระบบ และดึงข้อมูลกลับลงไฟล์
-'  รุ่น 2026.10.08-y1
+'  รุ่น 2026.10.14-y2  (Pickup_Log แยกฝ่าย WH / QA)
 '
 '  โครงสร้างไฟล์ (รุ่นนี้)
 '    Plan         = ชีตสำหรับ "ส่งค่า" อย่างเดียว : พิมพ์/วางงานใหม่ แล้วกด ส่งงานใหม่ขึ้นระบบ
@@ -1597,10 +1597,10 @@ Private Function BuildPickup(ByVal rows As Collection, ByVal plan As Collection,
     Dim v() As Variant, k As Long, row As Variant, f As Variant, n As Long
     n = rows.Count
     If n = 0 Then Exit Function
-    ReDim v(1 To n, 1 To 11)
+    ReDim v(1 To n, 1 To 12)
     For k = 1 To n
-        ' v_pickup_log = id0,task_date1,ts2,task_code3,note4,photo_count5,photos6,source7
-        row = Fields(CStr(rows.Item(k)), 8)
+        ' v_pickup_log = id0,task_date1,ts2,task_code3,note4,photo_count5,photos6,source7,dept8 (WH = คลังสินค้า / QA)
+        row = Fields(CStr(rows.Item(k)), 9)
         v(k, 1) = TsVal(CStr(row(2)))
         v(k, 2) = TsVal(CStr(row(1)))
         v(k, 3) = TxtVal(CStr(row(3)))
@@ -1615,6 +1615,7 @@ Private Function BuildPickup(ByVal rows As Collection, ByVal plan As Collection,
         v(k, 9) = TxtVal(CStr(row(6)))
         v(k, 10) = TxtVal(CStr(row(7)))
         v(k, 11) = NumVal(CStr(row(0)))
+        v(k, 12) = TxtVal(IIf(Len(Trim$(CStr(row(8)))) > 0, CStr(row(8)), "WH"))
     Next k
     BuildPickup = v
 End Function
@@ -1758,13 +1759,16 @@ Private Function BuildSummary(ByVal plan As Collection, ByVal pidx As Collection
     Next k
 
     For k = 1 To picks.Count
-        row = Fields(CStr(picks.Item(k)), 8)
+        row = Fields(CStr(picks.Item(k)), 9)
         key = UCase$(Trim$(CStr(row(3))))
         If HasKey(pidx, key) Then
             i = CLng(pidx.Item(key))
             ts = CStr(row(2))
             If ts > CStr(ag(i, 10)) Then ag(i, 10) = ts
-            If IsNumeric(CStr(row(5))) And Len(CStr(row(5))) > 0 Then ag(i, 7) = N0(ag(i, 7)) + Val(CStr(row(5)))
+            ' นับเฉพาะรูปจากคลังสินค้า (WH) ; รูปจาก QA ดูในชีต Pickup_Log คอลัมน์ ฝ่าย
+            If UCase$(Trim$(CStr(row(8)))) <> "QA" Then
+                If IsNumeric(CStr(row(5))) And Len(CStr(row(5))) > 0 Then ag(i, 7) = N0(ag(i, 7)) + Val(CStr(row(5)))
+            End If
         End If
     Next k
 
@@ -1830,7 +1834,7 @@ Private Function BuildSummary(ByVal plan As Collection, ByVal pidx As Collection
 End Function
 
 Private Function PickupHeads() As String
-    PickupHeads = "Timestamp|วันที่งาน|Task Code|ชื่อบริษัทขนส่ง|ทะเบียนรถ|ชื่อผู้ขับ|หมายเหตุ|จำนวนรูป (คลังสินค้า)|ลิงก์รูปจากคลังสินค้า|ที่มา (คน/GPS)|ID"
+    PickupHeads = "Timestamp|วันที่งาน|Task Code|ชื่อบริษัทขนส่ง|ทะเบียนรถ|ชื่อผู้ขับ|หมายเหตุ|จำนวนรูป|ลิงก์รูป|ที่มา (คน/GPS)|ID|ฝ่าย (WH/QA)"
 End Function
 
 Private Function RoadHeads() As String

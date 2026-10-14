@@ -71,3 +71,14 @@ dialog p{margin:0 0 14px}
 .ph.s-done i{background:var(--green);color:#06101f}
 .ph.s-err i{background:var(--red)}
 .ph.s-up img,.ph.s-wait img{opacity:.6}
+/* รูปที่ส่งแล้ว (ดูอย่างเดียว) และปุ่มเพิ่มรูปเมื่อครบจำนวน */
+.btn.pick.off{opacity:.45;cursor:not-allowed}
+.sg{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-top:10px;font-size:14px;overflow-wrap:anywhere}
+.sg span{color:var(--text);font-weight:600}
+.sg b{color:var(--green);font-weight:600;white-space:nowrap;font-size:13px}
+.sg + .grid{margin-top:6px}
+a.ph{display:block;border:1px solid var(--rule)}
+a.ph:not([href]) img{visibility:hidden}
+#sentBox .grid,.sentbox .grid{grid-template-columns:repeat(5,1fr)}
+.dept{display:inline-block;font-size:.72em;vertical-align:.12em;padding:0 .5em;border-radius:6px;background:var(--amber);color:#06101f}
+.dept.qa{background:#a78bfa}

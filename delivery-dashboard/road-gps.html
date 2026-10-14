@@ -28,6 +28,7 @@
 
   <div id="app" hidden>
     <div class="card" id="taskBox"></div>
+    <div class="card" id="sentCard" hidden><h2>รูปที่ส่งแล้ว <small>ดูได้อย่างเดียว</small></h2><div id="sentBox"></div></div>
 
     <div class="card" id="g1">
       <h2>สถานะรถ <small>บันทึกอัตโนมัติจาก GPS</small></h2>
@@ -40,7 +41,7 @@
       <div id="s2lock" class="lock" hidden></div>
       <div id="s2body">
         <div class="meter" id="s2time"></div>
-        <div class="lbl" style="margin-top:8px">รูปสถานการณ์บนถนน <small>สูงสุด 5 รูป รวมไม่เกิน 5 MB</small></div>
+        <div class="lbl" style="margin-top:8px">รูปสถานการณ์บนถนน <small>ครั้งละไม่เกิน 5 รูป รวมไม่เกิน 5 MB</small></div>
         <div id="pkRoad"></div>
         <label class="lbl" for="noteRoad" style="margin-top:14px">หมายเหตุ</label>
         <textarea id="noteRoad" maxlength="2000" placeholder="เช่น รถติด ฝนตก"></textarea>
@@ -53,7 +54,7 @@
       <label class="lbl" for="photoTarget">เลือกจุด</label>
       <select id="photoTarget" class="inp"></select>
       <div id="photoOpen" class="meter"></div>
-      <div class="lbl" style="margin-top:12px">รูป <small>สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></div>
+      <div class="lbl" style="margin-top:12px">รูป <small>รวมไม่เกิน 20 รูปต่อจุด</small></div>
       <div id="pkUnload"></div>
       <label class="lbl" for="noteUnload" style="margin-top:14px">หมายเหตุ</label>
       <textarea id="noteUnload" maxlength="2000" placeholder="ถ้ามี"></textarea>

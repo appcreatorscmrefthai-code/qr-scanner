@@ -133,7 +133,7 @@
   const PLAN_KEYS = 'task_code,date,detail,client,transport,schedule,arr1,arr2,arr3,company,vehicle_type,plate,driver,phone,round,stop1,map1,rec1,stop2,map2,rec2,stop3,map3,rec3,status'.split(',');
   const PLAN_HEADS = ('Task Code|Date|Detail|Client Name|Transport|Schedule|Arrival Time 1|Arrival Time 2|Arrival Time 3|ชื่อบริษัทขนส่ง|ประเภทรถ|ทะเบียนรถ|ชื่อผู้ขับ|เบอร์โทรผู้ขับ|รอบขนส่ง|' +
     'จุดที่ 1|Map1|ชื่อ-เบอร์โทรผู้รับ จุดที่ 1|จุดที่ 2|Map2|ชื่อ-เบอร์โทรผู้รับ จุดที่ 2|จุดที่ 3|Map3|ชื่อ-เบอร์โทรผู้รับ จุดที่ 3|Task Status|Synced|สถานะใน Backup').split('|');
-  const PICKUP_HEADS = ['Timestamp', 'วันที่งาน', 'Task Code', 'ชื่อบริษัทขนส่ง', 'ทะเบียนรถ', 'ชื่อผู้ขับ', 'หมายเหตุ', 'จำนวนรูป (คลังสินค้า)', 'โฟลเดอร์รูปในเครื่อง', 'ที่มา (คน/GPS)', 'ID'];
+  const PICKUP_HEADS = ['Timestamp', 'วันที่งาน', 'Task Code', 'ชื่อบริษัทขนส่ง', 'ทะเบียนรถ', 'ชื่อผู้ขับ', 'หมายเหตุ', 'จำนวนรูป', 'โฟลเดอร์รูปในเครื่อง', 'ที่มา (คน/GPS)', 'ID', 'ฝ่าย (WH/QA)'];
   const ROAD_HEADS = ['Timestamp', 'วันที่งาน', 'Task Code', 'ประเภท', 'จุดที่', 'ชื่อจุดส่ง', 'ทะเบียนรถ', 'ทะเบียนเดิม (ถ้าแก้ไข)', 'หมายเหตุ', 'คาดว่าจะถึงจุดที่ 1', 'คาดว่าจะถึงจุดที่ 2', 'คาดว่าจะถึงจุดที่ 3',
     'จำนวนรูปบนถนน', 'จำนวนรูปลงงาน', 'โฟลเดอร์รูปในเครื่อง', 'จบงาน', 'ที่มา (คน/GPS)', 'ID'];
   const EDIT_HEADS = ['Timestamp', 'วันที่งาน', 'Task Code', 'ช่องทาง', 'รายการที่แก้ไข', 'ค่าเดิม', 'ค่าใหม่', 'ผู้แก้ไข', 'ID'];
@@ -149,7 +149,7 @@
   }
   function rowDirs(kind, r) {
     const t = safeName(r.task_code), c = [];
-    if (kind === 'pickup' && (r.photos || []).length) c.push('ส่งจากคลังสินค้า');
+    if (kind === 'pickup' && (r.photos || []).length) c.push(String(r.dept || 'WH').toUpperCase() === 'QA' ? 'ส่งจาก QA' : 'ส่งจากคลังสินค้า');
     if (kind === 'road') {
       if ((r.road || []).length) c.push('สถานการณ์บนถนน');
       if ((r.unload || []).length) {
@@ -183,7 +183,7 @@
     const wb = XLSX.utils.book_new(), add = (name, ws) => XLSX.utils.book_append_sheet(wb, ws, name);
     add('Plan_Backup', sheet(PLAN_HEADS, plan.map(p => PLAN_KEYS.map(k => p[k]).concat([p.synced, 'ปกติ']))));
     add('Pickup_Log', sheet(PICKUP_HEADS, pickup.map(r => { const t = pmap[r.task_code] || {};
-      return [r.ts, t.date, r.task_code, t.company, t.plate, t.driver, r.note, (r.photos || []).length, rowDirs('pickup', r), r.source, r.id]; })));
+      return [r.ts, t.date, r.task_code, t.company, t.plate, t.driver, r.note, (r.photos || []).length, rowDirs('pickup', r), r.source, r.id, r.dept || 'WH']; })));
     add('Road_Log', sheet(ROAD_HEADS, road.map(r => { const t = pmap[r.task_code] || {}, st = +r.stop || 0, nm = t.task_code ? stopNames(t)[st - 1] : '';
       return [r.ts, t.date, r.task_code, ROAD_TH[r.type] || r.type, st || null, nm, r.plate, r.old_plate, r.note, r.eta1, r.eta2, r.eta3, (r.road || []).length, (r.unload || []).length,
         rowDirs('road', r), r.finish ? 'ใช่' : '', r.source, r.id]; })));

@@ -28,6 +28,7 @@
 
   <div id="app" hidden>
     <div class="card" id="taskBox"></div>
+    <div class="card" id="sentCard" hidden><h2>รูปที่ส่งแล้ว <small>ดูได้อย่างเดียว</small></h2><div id="sentBox"></div></div>
 
     <div class="card" id="s1">
       <h2>1. เช็คอินเมื่อรถมาถึง SCM</h2>
@@ -68,7 +69,7 @@
       <h2>3. สถานการณ์บนถนน <small>ส่งได้ตลอดจนกว่ารถถึงหน้างาน</small></h2>
       <div id="s2lock" class="lock" hidden></div>
       <div id="s2body">
-        <div class="lbl">รูปสถานการณ์บนถนน <small>สูงสุด 5 รูป รวมไม่เกิน 5 MB</small></div>
+        <div class="lbl">รูปสถานการณ์บนถนน <small>ครั้งละไม่เกิน 5 รูป รวมไม่เกิน 5 MB</small></div>
         <div id="pkRoad"></div>
         <label class="lbl" for="noteRoad" style="margin-top:14px">หมายเหตุ</label>
         <textarea id="noteRoad" maxlength="2000" placeholder="เช่น รถติด ฝนตก"></textarea>
@@ -84,14 +85,14 @@
       <div id="s3arrive" hidden>
         <div class="meter" id="arriveText"></div>
         <div id="retPhoto" hidden>
-          <div class="lbl" style="margin-top:12px">รูปที่ SCM ตอนรถกลับ <small>ไม่บังคับ สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></div>
+          <div class="lbl" style="margin-top:12px">รูปที่ SCM ตอนรถกลับ <small>ไม่บังคับ รวมไม่เกิน 20 รูป</small></div>
           <div id="pkReturn"></div>
         </div>
         <button class="btn finish act" id="arriveBtn" type="button" style="margin-top:10px"></button>
       </div>
       <div id="s3unload" hidden>
         <div id="arrivedLine" class="okline"></div>
-        <div class="lbl" style="margin-top:12px">รูปลงงาน <small>สูงสุด 20 รูป รวมไม่เกิน 50 MB</small></div>
+        <div class="lbl" style="margin-top:12px">รูปลงงาน <small>รวมไม่เกิน 20 รูปต่อจุด</small></div>
         <div id="pkUnload"></div>
         <label class="lbl" for="noteUnload" style="margin-top:14px">หมายเหตุ</label>
         <textarea id="noteUnload" maxlength="2000" placeholder="ถ้ามี"></textarea>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>อัปโหลดรูปส่งงาน QA</title>
+<link rel="icon" type="image/png" href="icon-192.png?v=2">
+<link rel="apple-touch-icon" href="icon-180.png?v=2">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>อัปโหลดรูปส่งงาน <span class="dept qa">QA</span></h1>
+  <p class="sub">สำหรับประกันคุณภาพ (QA) ถ่ายรูปตรวจสินค้า อัปโหลดหลังรถออกจาก SCM ทันที ส่งเพิ่มได้จนครบ 24 ชม. นับจากอัปโหลดครั้งล่าสุด</p>
+  <div id="demo" class="msg info" hidden>โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js ข้อมูลจะไม่ถูกบันทึก</div>
+  <div id="msg" class="msg err" hidden role="alert"></div>
+
+  <div id="formBox">
+    <div class="card">
+      <h2>1. งานที่ส่ง</h2>
+      <div id="reader" hidden></div>
+      <div id="taskBox" hidden></div>
+      <div id="winInfo" class="meter" hidden></div>
+      <button class="btn primary" id="scanBtn" type="button" hidden>เปิดกล้องสแกน QR ประจำงาน</button>
+    </div>
+
+    <div class="card">
+      <h2>2. รูปส่งงาน <small>รวมไม่เกิน 20 รูป · ครั้งละไม่เกิน 50 MB</small></h2>
+      <div id="sentBox" class="sentbox"></div>
+      <div id="pkPhotos" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2><label for="note">3. หมายเหตุ</label></h2>
+      <textarea id="note" maxlength="2000" placeholder="ถ้ามี"></textarea>
+    </div>
+
+    <div class="card stamp"><span>วันที่และเวลา (บันทึกอัตโนมัติ)</span><b id="stamp"></b></div>
+
+    <div class="btns"><button class="btn primary" id="sendBtn" type="button" disabled>ส่งข้อมูล</button></div>
+  </div>
+
+  <div id="doneBox" class="card done" hidden>
+    <div class="ok">✓</div><p id="doneText"></p>
+    <button class="btn ghost" id="moreBtn" type="button" hidden>ดูรูปที่ส่งแล้ว / ส่งรูปเพิ่ม</button>
+  </div>
+  <div id="prog" hidden><div id="progText" class="meter"></div><div class="bar"><i id="progBar"></i></div></div>
+</div>
+<div id="toast" class="toast" hidden role="status"></div>
+<script>window.UPLOAD_DEPT = 'QA';</script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="form.js"></script>
+<script src="upload.js"></script>
+</body>
+</html>

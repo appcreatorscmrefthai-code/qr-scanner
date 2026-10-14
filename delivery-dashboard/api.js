@@ -5,7 +5,7 @@ window.SB = (function () {
   const CFG = window.APP_CONFIG || {};
   const URL0 = String(CFG.SUPABASE_URL || '').replace(/\/+$/, ''), KEY = CFG.SUPABASE_KEY || '';
   const ON = !!(URL0 && KEY);
-  const VER = '2026.10.08-s10';
+  const VER = '2026.10.14-s16';
 
   // เรียก API หนึ่งครั้ง : สำเร็จคืนข้อมูล, ไม่สำเร็จ throw Error (e.status = รหัส HTTP, e.server = true เมื่อเซิร์ฟเวอร์ปฏิเสธเอง)
   async function call(path, opt) {
@@ -41,7 +41,7 @@ window.SB = (function () {
       status: p.status || '', canceled: /cancel|ยกเลิก/i.test(p.status || ''), key: p.key || '', updatedAt: p.updated_at || ''
     };
   }
-  const pickLog = l => ({ id: l.id, time: l.time, note: l.note || '', photos: l.photos || [], source: l.source || 'คน' });
+  const pickLog = l => ({ id: l.id, time: l.time, note: l.note || '', photos: l.photos || [], source: l.source || 'คน', dept: l.dept || 'WH' });
   const roadLog = l => ({ id: l.id, time: l.time, type: l.type, stop: l.stop || 0, plate: l.plate || '', oldPlate: l.old_plate || '', note: l.note || '',
     eta: [l.eta1 || '', l.eta2 || '', l.eta3 || ''], road: l.road || [], unload: l.unload || [], finish: !!l.finish, source: l.source || 'คน' });
   const byId = (a, b) => a.id - b.id;
@@ -67,7 +67,7 @@ window.SB = (function () {
   function full(planRow, pickRows, roadRows) {
     const t = task(planRow);
     const pick = (pickRows || []).slice().sort(byId);
-    t.pickupRows = pick.map(pickLog);                                       // รูปจากคลังสินค้า (อัปโหลดได้หลายครั้ง)
+    t.pickupRows = pick.map(pickLog);                                       // รูปส่งงานจาก WH / QA (dept) อัปโหลดได้หลายครั้ง
     t.pickupLog = t.pickupRows.length ? t.pickupRows[t.pickupRows.length - 1] : null;      // รายการล่าสุด
     t.logs = (roadRows || []).slice().sort(byId).map(roadLog);
     t.state = state(t);
