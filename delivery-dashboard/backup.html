@@ -58,7 +58,7 @@ code{background:var(--panel2);border:1px solid var(--rule);border-radius:5px;pad
 <body>
 <header>
   <h1>Backup ข้อมูล</h1>
-  <div class="right"><a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">Dashboard วันนี้</a><span id="userBox"></span></div>
+  <div class="right"><a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">ติดตามงานวันนี้</a><span id="userBox"></span></div>
 </header>
 <main>
   <div id="msg" role="status"></div>
@@ -97,15 +97,15 @@ code{background:var(--panel2);border:1px solid var(--rule);border-radius:5px;pad
     <h2 id="h4s">4) Backup เก็บไว้ที่ไหน</h2>
     <ul class="help">
       <li>ทุกวัน <b>22:00 น.</b> เครื่องของ Admin จะดึงข้อมูลและรูปทั้งหมดมาเก็บไว้ในเครื่อง Admin เอง</li>
-      <li>รูปแยกโฟลเดอร์ตาม Task Code เช่น <code>D20261008-02 &gt; ส่งจากคลังสินค้า &gt; รูป</code> หัวข้อมี ส่งจากคลังสินค้า (WH), ส่งจาก QA, สถานการณ์บนถนน, ลงงานจุดที่ 1-3, ลงงานส่งกลับ</li>
+      <li>รูปแยกโฟลเดอร์ตามงาน (Task Code_Client Name) เช่น <code>D20261015-01_LN26-577 &gt; ส่งจากคลังสินค้า &gt; รูป</code> หัวข้อมี ส่งจากคลังสินค้า (WH), ส่งจาก QA, รูปรถเข้า, สถานการณ์บนถนน, ลงงานจุดที่ 1-3, ลงงานส่งกลับ</li>
       <li>ข้อมูลทั้งหมด (Plan / Pickup / Road / Edit / Delay) อยู่ในไฟล์ Excel ที่ดาวน์โหลดได้จากหน้านี้ งานที่ถูกลบออกจากระบบแล้วยังคงอยู่ในไฟล์ Backup (ช่อง “สถานะใน Backup”)</li>
       <li>ต้องการรูปต้นฉบับของงานเก่า ให้แจ้ง Admin ระบุ Task Code</li>
     </ul>
   </section>
 </main>
-<script src="config.js"></script>
-<script src="api.js"></script>
-<script src="auth.js"></script>
-<script src="backup.js"></script>
+<script src="config.js?v=18"></script>
+<script src="api.js?v=18"></script>
+<script src="auth.js?v=18"></script>
+<script src="backup.js?v=18"></script>
 </body>
 </html>

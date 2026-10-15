@@ -1,5 +1,5 @@
 -- =====================================================================
--- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.14-s16)
+-- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.15-s18)
 -- วิธีใช้ : Supabase > SQL Editor > New query > วางทั้งไฟล์นี้ > กด Run
 -- รันซ้ำได้ ข้อมูลเดิมไม่หาย (ใช้ตอนผมส่งรุ่นแก้ไขมาให้)
 -- =====================================================================
@@ -114,6 +114,16 @@ language sql immutable as $$
   from (select btrim(regexp_replace(coalesce(v, ''), '\s+', ' ', 'g')) as s) x
 $$;
 
+-- งานต่างประเทศ (รุ่น s18) : ประเภทรถ CL 20FT / CL 40FT / CL 40HC / LCL / DHL ตรวจเฉพาะรถเข้า-ออก (บันทึกจากฟอร์ม WH) ไม่ตรวจบนถนน / Delay
+create or replace function public.intl_kind(v text) returns text
+language sql immutable as $$
+  select case when x like 'CL20%' then 'CL20FT' when x like 'CL40HC%' then 'CL40HC' when x like 'CL40%' then 'CL40FT'
+              when x like 'LCL%' then 'LCL' when x like 'DHL%' then 'DHL' else '' end
+  from (select upper(regexp_replace(coalesce(v, ''), '[\s\-_''"]', '', 'g')) as x) a
+$$;
+create or replace function public.is_intl(v text) returns boolean
+language sql immutable as $$ select public.intl_kind(v) <> '' $$;
+
 -- ทะเบียนรถ : "3 ฒผ 2186", "ฒผ 2186" หรือ "70-1234"  (ไม่ถูกรูปแบบคืนค่าว่าง)
 create or replace function public.norm_plate(v text) returns text
 language plpgsql immutable as $$
@@ -217,6 +227,10 @@ language sql stable security definer set search_path = public as $$
   select coalesce(sum(cardinality(l.unload)), 0)::int from public.road_log l
   where l.task_code = p_task and ((p_stop = 0 and l.type = 'return') or (p_stop > 0 and l.stop = p_stop and l.type in ('arrive', 'unload')))
 $$;
+-- จำนวนรูปสูงสุดของแต่ละฝ่าย (รวมทุกครั้งที่ส่ง) : WH 20 รูป, QA 50 รูป
+drop function if exists public.dept_photo_max(text);
+create or replace function public.dept_photo_max(p_dept text, p_intl boolean default false) returns int
+language sql immutable as $$ select case when p_intl then 300 when p_dept = 'QA' then 50 else 20 end $$;     -- งานต่างประเทศ WH / QA ฝ่ายละ 300 รูป
 create or replace function public.dept_photo_count(p_task text, p_dept text) returns int
 language sql stable security definer set search_path = public as $$
   select coalesce(sum(cardinality(l.photos)), 0)::int from public.pickup_log l where l.task_code = p_task and l.dept = p_dept and l.source <> 'GPS'
@@ -240,18 +254,39 @@ begin
   v_note := left(coalesce(p->>'note', ''), 2000);
 
   if p->>'form' in ('pickup', 'qa') then
-    -- รูปส่งงาน WH (pickup.html) / QA (qa.html) : ส่งได้หลายครั้งจนกว่าจะผ่าน 24 ชม. นับจากอัปโหลดครั้งล่าสุดของฝ่ายนั้น รวมไม่เกิน 20 รูปต่อฝ่าย
+    -- รูปส่งงาน WH (pickup.html) / QA (qa.html) : ส่งได้หลายครั้งจนกว่าจะผ่าน 24 ชม. นับจากอัปโหลดครั้งล่าสุดของฝ่ายนั้น รวมไม่เกิน WH 20 / QA 50 รูป
     v_dept := case when p->>'form' = 'qa' then 'QA' else 'WH' end;
     select max(time) into v_last from public.pickup_log where task_code = t.task_code and source <> 'GPS' and dept = v_dept;
     if v_last is not null and v_now > v_last + interval '24 hours' then
       raise exception 'ปิดรับรูปจาก % แล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)', v_dept;
     end if;
     v_have := public.dept_photo_count(t.task_code, v_dept);
-    if v_have >= 20 then raise exception 'ส่งรูปจาก % ครบ 20 รูปแล้ว ส่งเพิ่มไม่ได้', v_dept; end if;
-    ph := public.photo_list(p->'photos', pre, 20 - v_have, t.key);
+    if v_have >= public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) then
+      raise exception 'ส่งรูปจาก % ครบ % รูปแล้ว ส่งเพิ่มไม่ได้', v_dept, public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type));
+    end if;
+    ph := public.photo_list(p->'photos', pre, public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) - v_have, t.key);
     insert into public.pickup_log (time, task_code, note, photos, dept) values (v_now, t.task_code, v_note, coalesce(ph, '{}'), v_dept) returning id into v_id;
 
+  elsif p->>'form' in ('wh_in', 'wh_out') then
+    -- งานต่างประเทศ : WH บันทึกรถเข้า (พร้อมรูปรถเข้า ไม่เกิน 20 รูป) / รถออก (= จบงาน) จากฟอร์มอัปโหลดรูป WH
+    if not public.is_intl(t.vehicle_type) then raise exception 'งานนี้ไม่ใช่งานต่างประเทศ (ประเภทรถ %)', coalesce(nullif(t.vehicle_type, ''), '-'); end if;
+    if p->>'form' = 'wh_in' then
+      if exists (select 1 from public.road_log where task_code = t.task_code and type = 'checkin') then raise exception 'บันทึกรถเข้าของงานนี้ไปแล้ว'; end if;
+      ph := public.photo_list(p->'unload', pre, 20, t.key);
+      insert into public.road_log (time, task_code, type, plate, note, unload)
+        values (v_now, t.task_code, 'checkin', t.plate, left('WH ต่างประเทศ: รถเข้า' || case when v_note <> '' then ' · ' || v_note else '' end, 2000), coalesce(ph, '{}')) returning id into v_id;
+    else
+      if not exists (select 1 from public.road_log where task_code = t.task_code and type = 'checkin') then raise exception 'ยังไม่ได้บันทึกรถเข้า'; end if;
+      select id into v_id from public.road_log where task_code = t.task_code and type = 'depart' order by id limit 1;
+      if v_id is null then
+        v_fin := true;
+        insert into public.road_log (time, task_code, type, note, finish)
+          values (v_now, t.task_code, 'depart', left('WH ต่างประเทศ: รถออก' || case when v_note <> '' then ' · ' || v_note else '' end, 2000), true) returning id into v_id;
+      end if;
+    end if;
+
   elsif p->>'form' = 'driver' then
+    if public.is_intl(t.vehicle_type) then raise exception 'งานต่างประเทศ (%) ไม่ใช้ฟอร์มคนขับ : WH บันทึกรถเข้า-ออกในฟอร์มอัปโหลดรูป WH', t.vehicle_type; end if;
     e := array[public.hm(p->'eta'->>0), case when n >= 2 then public.hm(p->'eta'->>1) else '' end, case when n >= 3 then public.hm(p->'eta'->>2) else '' end];
     if v_type = 'checkin' then
       v_plate := public.norm_plate(p->>'plate');
@@ -329,8 +364,8 @@ begin
   if p->>'form' in ('pickup', 'qa') then
     select photos, dept into cur, v_dept from public.pickup_log where id = v_id and task_code = t.task_code for update;
     if not found then raise exception 'ไม่พบรายการที่จะแนบรูป'; end if;
-    v_other := public.dept_photo_count(t.task_code, v_dept) - cardinality(cur);          -- รวมทุกครั้งของฝ่ายนั้นไม่เกิน 20 รูป
-    add := public.photo_list(to_jsonb(cur) || coalesce(p->'photos', '[]'::jsonb), pre, greatest(cardinality(cur), 20 - v_other), t.key);
+    v_other := public.dept_photo_count(t.task_code, v_dept) - cardinality(cur);          -- รวมทุกครั้งของฝ่ายนั้นไม่เกิน WH 20 / QA 50 รูป
+    add := public.photo_list(to_jsonb(cur) || coalesce(p->'photos', '[]'::jsonb), pre, greatest(cardinality(cur), public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) - v_other), t.key);
     update public.pickup_log set photos = coalesce(add, '{}') where id = v_id;
   else
     select road, type, stop into cur, v_type, v_stop from public.road_log where id = v_id and task_code = t.task_code for update;
@@ -366,6 +401,7 @@ $$;
 create or replace function public.task_done(p public.plan) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.road_log l where l.task_code = p.task_code and (l.finish
+    or (public.is_intl(p.vehicle_type) and l.type = 'depart')
     or (coalesce(p.round, '') like '%กลับ%' and l.type = 'return')
     or (coalesce(p.round, '') not like '%กลับ%' and l.type = 'unload'
         and l.stop = greatest(1, (public.blank(p.stop1) <> '')::int + (public.blank(p.stop2) <> '')::int + (public.blank(p.stop3) <> '')::int))))
@@ -815,6 +851,7 @@ begin
   for p in select * from public.plan t where t.date between today - 2 and today and not public.is_canceled(t.status) order by t.date, t.schedule, t.task_code loop
     eff := coalesce((select l.plate from public.road_log l where l.task_code = p.task_code and l.type = 'checkin' order by l.id limit 1), p.plate);
     if public.plate_key(eff) <> p_key then continue; end if;
+    if public.is_intl(p.vehicle_type) then continue; end if;                         -- งานต่างประเทศ : ไม่ใช้ GPS
 
     names := '{}'; maps := '{}'; slots := '{}';
     for i in 1..3 loop
@@ -1223,7 +1260,7 @@ language sql stable security definer set search_path = public as $$
   cross join lateral (
     select l.time, l.source from public.road_log l
     where l.task_code = t.task_code and l.type in ('arrive', 'unload') and l.stop = s.i order by l.time, l.id limit 1) a
-  where t.date between p_from and p_to and not public.is_canceled(t.status) and x.pt[s.slot + 1] is not null
+  where t.date between p_from and p_to and not public.is_canceled(t.status) and x.pt[s.slot + 1] is not null and not public.is_intl(t.vehicle_type)
 $$;
 
 create or replace function public.delay_detail(p_from date, p_to date) returns jsonb
@@ -1292,7 +1329,8 @@ begin
     if coalesce(array_length(names, 1), 0) = 0 then names := array[public.blank(p.detail)]; maps := array['']; slots := array[1]; end if;
     ns := array_length(names, 1);
     rt := p.round like '%กลับ%';
-    fin := case when rt then exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'return')
+    fin := case when public.is_intl(p.vehicle_type) then exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'depart')
+                when rt then exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'return')
                 else exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'unload' and l.stop = ns) end;
     if p.date < p_date and fin then continue; end if;         -- งานข้ามวันที่จบแล้วไม่ต้องแสดง
 
@@ -1570,7 +1608,7 @@ begin
   select coalesce(nullif(name, ''), email) into v_who from public.profiles where user_id = auth.uid();
   select string_agg(distinct w, ', ') into v_where from (
     select 'รูปจาก ' || dept as w from public.pickup_log where task_code = p_code and p_path = any(photos)
-    union all select case when type = 'return' then 'รูปตอนรถกลับ' when p_path = any(road) then 'รูปบนถนน' else 'รูปลงงานจุดที่ ' || stop end
+    union all select case when type = 'return' then 'รูปตอนรถกลับ' when type = 'checkin' then 'รูปรถเข้า' when p_path = any(road) then 'รูปบนถนน' else 'รูปลงงานจุดที่ ' || stop end
       from public.road_log where task_code = p_code and (p_path = any(road) or p_path = any(unload))) a;
   update public.pickup_log set photos = array_remove(photos, p_path) where task_code = p_code and p_path = any(photos);
   get diagnostics n = row_count;
@@ -1584,3 +1622,4 @@ begin
 end $$;
 revoke all on function public.photo_remove(text, text), public.stop_photo_count(text, int), public.dept_photo_count(text, text) from public, anon, authenticated;
 grant execute on function public.photo_remove(text, text) to authenticated;
+grant execute on function public.intl_kind(text), public.is_intl(text) to anon, authenticated;

@@ -195,7 +195,7 @@
     const open = (p, tip) => {
       const c = `col${p === cur ? ' cur' : ''}`;
       if (group === 'month') return `<div class="${c} go" data-mon="${p}" role="button" tabindex="0" title="${esc((tip ? tip + '\n' : '') + 'กดเพื่อดูรายวันของเดือนนี้')}">`;
-      return `<a class="${c}" href="${dashUrl(p)}" title="${esc((tip ? tip + '\n' : p + ' : ไม่มีข้อมูลเวลาถึง\n') + 'กดเพื่อเปิด Dashboard วันนี้')}">`;
+      return `<a class="${c}" href="${dashUrl(p)}" title="${esc((tip ? tip + '\n' : p + ' : ไม่มีข้อมูลเวลาถึง\n') + 'กดเพื่อเปิดหน้าติดตามการจัดส่งของวันนั้น')}">`;
     };
     return grid + slots.map(p => {
       const r = by[p];
@@ -230,7 +230,7 @@
       $('dtNote').textContent = tot.n ? `รวม ${tot.n} จุด ทันเวลา ${Math.round(1000 * tot.ok / tot.n) / 10}%` : '';
       $('dtChart').innerHTML = trendChart(rows, from, d);
       const w = $('dtChart').parentNode; w.scrollLeft = w.scrollWidth;      // จอเล็ก : เลื่อนไปช่วงล่าสุด
-      $('dtHint').textContent = group === 'month' ? 'กดเดือนในกราฟหรือตาราง = ดูรายวันของเดือนนั้น' : 'กดวันที่ในกราฟหรือตาราง = เปิด Dashboard ของวันนั้น';
+      $('dtHint').textContent = group === 'month' ? 'กดเดือนในกราฟหรือตาราง = ดูรายวันของเดือนนั้น' : 'กดวันที่ในกราฟหรือตาราง = เปิดหน้าติดตามการจัดส่งของวันนั้น';
       $('dtBody').innerHTML = rows.length ? rows.slice().reverse().map(r => `<tr class="go" tabindex="0" ${group === 'month' ? `data-mon="${esc(r.period)}"` : `data-day="${esc(r.period)}"`}>
         <td>${group === 'month' ? `<a class="dl" href="#" data-mon="${esc(r.period)}">${esc(r.period)}</a>` : `<a class="dl" href="${dashUrl(r.period)}">${esc(r.period)}</a>`}</td><td class="num">${r.n}</td><td class="num">${r.ontime}</td><td class="num">${r.late}</td>
         <td class="num"><b style="color:${r.ontime_pct >= 90 ? '#34d08c' : r.ontime_pct >= 70 ? '#f6b93b' : '#ff6b7c'}">${r.ontime_pct}%</b></td><td class="num">${r.avg_late == null ? '-' : r.avg_late}</td><td class="num">${r.max_late == null ? '-' : r.max_late}</td><td class="num">${r.gps}</td></tr>`).join('')

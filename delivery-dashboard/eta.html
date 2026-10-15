@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>ตั้งค่า ETA - Delivery Tracking</title>
+<title>ตั้งค่า - Delivery Tracking</title>
 <link rel="icon" type="image/png" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-180.png?v=2">
 <link rel="manifest" href="manifest.webmanifest">
@@ -42,8 +42,8 @@ td input.v{width:7em}
 </head>
 <body>
 <header>
-  <h1>ตั้งค่า ETA / GPS</h1>
-  <div class="right"><a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">Dashboard วันนี้</a><span id="userBox"></span></div>
+  <h1>ตั้งค่า <small style="font-size:.55em;color:var(--muted);font-weight:500">ETA / GPS / พิกัดต้นทาง</small></h1>
+  <div class="right"><a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">ติดตามงานวันนี้</a><span id="userBox"></span></div>
 </header>
 <main>
   <div id="msg"></div>
@@ -66,9 +66,9 @@ td input.v{width:7em}
   <h2>3) ตำแหน่งรถล่าสุดที่ได้รับ</h2>
   <div class="scroll"><table><thead><tr><th>ทะเบียน</th><th>ระบบ GPS</th><th>เวลากล่อง GPS</th><th>ความเร็ว</th><th>สถานะ</th><th>พิกัด</th></tr></thead><tbody id="gp"></tbody></table></div>
 </main>
-<script src="config.js"></script>
-<script src="api.js"></script>
-<script src="auth.js"></script>
+<script src="config.js?v=18"></script>
+<script src="api.js?v=18"></script>
+<script src="auth.js?v=18"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

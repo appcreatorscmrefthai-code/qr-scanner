@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Summary - Delivery Tracking</title>
+<title>สรุปภาพรวมการจัดส่ง - Delivery Tracking</title>
 <link rel="icon" type="image/png" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-180.png?v=2">
 <link rel="manifest" href="manifest.webmanifest">
@@ -116,11 +116,11 @@ td a.dl{color:#4aa8ff;font-weight:700;text-decoration:none}td a.dl:hover{text-de
 </head>
 <body>
 <header>
-  <h1>Summary</h1>
+  <h1>สรุปภาพรวมการจัดส่ง</h1>
   <div class="right">
     <input id="date" type="date" class="dbx" aria-label="เลือกวันที่">
     <button id="today" type="button">วันนี้</button>
-    <a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">Dashboard</a><a class="nav" href="route.html">Route Plan</a><span id="userBox"></span>
+    <a class="nav" href="index.html">ปฏิทิน</a><a class="nav" href="dashboard.html">ติดตามการจัดส่ง</a><a class="nav" href="route.html">วางแผนเส้นทาง</a><span id="userBox"></span>
   </div>
 </header>
 <main>
@@ -144,7 +144,7 @@ td a.dl{color:#4aa8ff;font-weight:700;text-decoration:none}td a.dl:hover{text-de
       <span id="dtNote"></span>
     </div>
     <div class="tcw"><div id="dtChart" class="tc" role="group" aria-label="กราฟเปอร์เซ็นต์ทันเวลา"></div></div>
-    <div class="tleg"><span><i style="background:var(--green)"></i>ทันเวลา ≥ 90%</span><span><i style="background:var(--amber)"></i>70–89%</span><span><i style="background:var(--red)"></i>ต่ำกว่า 70%</span><span>- - - เป้าหมาย 90%</span><span>ตัวเลขใต้วันที่ = จำนวนจุดส่ง</span><span id="dtHint">กดวันที่ในกราฟหรือตาราง = เปิด Dashboard ของวันนั้น</span></div>
+    <div class="tleg"><span><i style="background:var(--green)"></i>ทันเวลา ≥ 90%</span><span><i style="background:var(--amber)"></i>70–89%</span><span><i style="background:var(--red)"></i>ต่ำกว่า 70%</span><span>- - - เป้าหมาย 90%</span><span>ตัวเลขใต้วันที่ = จำนวนจุดส่ง</span><span id="dtHint">กดวันที่ในกราฟหรือตาราง = เปิดหน้าติดตามการจัดส่งของวันนั้น</span></div>
     <div class="tw"><table><thead><tr><th>ช่วง</th><th class="num">จุดส่ง</th><th class="num">ทันเวลา</th><th class="num">สาย</th><th class="num">% ทันเวลา</th><th class="num">สายเฉลี่ย (นาที)</th><th class="num">สายสุด (นาที)</th><th class="num">จาก GPS</th></tr></thead><tbody id="dtBody"></tbody></table></div>
   </section>
 
@@ -155,9 +155,9 @@ td a.dl{color:#4aa8ff;font-weight:700;text-decoration:none}td a.dl:hover{text-de
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="config.js"></script>
-<script src="api.js"></script>
-<script src="auth.js"></script>
-<script src="gps.js"></script>
+<script src="config.js?v=18"></script>
+<script src="api.js?v=18"></script>
+<script src="auth.js?v=18"></script>
+<script src="gps.js?v=18"></script>
 </body>
 </html>

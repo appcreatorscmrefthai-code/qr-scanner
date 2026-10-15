@@ -147,14 +147,15 @@
     const n = [1, 2, 3].map(k => String(p['stop' + k] || '').trim()).filter(Boolean);
     return n.length ? n : [String(p.detail || '').trim()];
   }
-  function rowDirs(kind, r) {
-    const t = safeName(r.task_code), c = [];
+  // โฟลเดอร์รูปในเครื่อง (เหมือนบอต Backup) : Photos\<Task Code>_<Client Name>\<หัวข้อ>
+  function rowDirs(kind, r, p) {
+    const client = String((p && p.client) || '').trim(), t = safeName(client ? `${r.task_code}_${client}` : r.task_code).slice(0, 120), c = [];
     if (kind === 'pickup' && (r.photos || []).length) c.push(String(r.dept || 'WH').toUpperCase() === 'QA' ? 'ส่งจาก QA' : 'ส่งจากคลังสินค้า');
     if (kind === 'road') {
       if ((r.road || []).length) c.push('สถานการณ์บนถนน');
       if ((r.unload || []).length) {
         const k = +r.stop || 0;
-        c.push(r.type === 'return' ? 'ลงงานส่งกลับ' : (r.type === 'arrive' || r.type === 'unload') ? (k >= 1 && k <= 3 ? 'ลงงานจุดที่ ' + k : 'ลงงาน (ไม่ระบุจุด)') : 'รูปอื่นๆ');
+        c.push(r.type === 'return' ? 'ลงงานส่งกลับ' : r.type === 'checkin' ? 'รูปรถเข้า' : (r.type === 'arrive' || r.type === 'unload') ? (k >= 1 && k <= 3 ? 'ลงงานจุดที่ ' + k : 'ลงงาน (ไม่ระบุจุด)') : 'รูปอื่นๆ');
       }
     }
     return c.map(x => 'Photos\\' + t + '\\' + x).join(' | ');
@@ -183,10 +184,10 @@
     const wb = XLSX.utils.book_new(), add = (name, ws) => XLSX.utils.book_append_sheet(wb, ws, name);
     add('Plan_Backup', sheet(PLAN_HEADS, plan.map(p => PLAN_KEYS.map(k => p[k]).concat([p.synced, 'ปกติ']))));
     add('Pickup_Log', sheet(PICKUP_HEADS, pickup.map(r => { const t = pmap[r.task_code] || {};
-      return [r.ts, t.date, r.task_code, t.company, t.plate, t.driver, r.note, (r.photos || []).length, rowDirs('pickup', r), r.source, r.id, r.dept || 'WH']; })));
+      return [r.ts, t.date, r.task_code, t.company, t.plate, t.driver, r.note, (r.photos || []).length, rowDirs('pickup', r, t), r.source, r.id, r.dept || 'WH']; })));
     add('Road_Log', sheet(ROAD_HEADS, road.map(r => { const t = pmap[r.task_code] || {}, st = +r.stop || 0, nm = t.task_code ? stopNames(t)[st - 1] : '';
       return [r.ts, t.date, r.task_code, ROAD_TH[r.type] || r.type, st || null, nm, r.plate, r.old_plate, r.note, r.eta1, r.eta2, r.eta3, (r.road || []).length, (r.unload || []).length,
-        rowDirs('road', r), r.finish ? 'ใช่' : '', r.source, r.id]; })));
+        rowDirs('road', r, t), r.finish ? 'ใช่' : '', r.source, r.id]; })));
     add('Edit_Log', sheet(EDIT_HEADS, edit.map(r => [r.ts, (pmap[r.task_code] || {}).date, r.task_code, r.source, r.field, r.old_value, r.new_value, r.by_user, r.id])));
     add('Delay_Detail', sheet(DELAY_HEADS, delay.map(r => [r.date, r.task_code, r.stop, r.stop_name, r.company, r.plate, r.plan, r.arrive, r.diff_min, r.ontime ? 'ทันเวลา' : 'ช้า', r.source])));
     add('Delay_Daily', sheet(['วันที่'].concat(TREND_TAIL), aggregate(delay, 'day')));

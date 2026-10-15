@@ -206,11 +206,8 @@
   $('dashLink').href = 'dashboard.html?date=' + encodeURIComponent($('date').value);
   if (window.DateBox) DateBox.attach($('date'));
   $('date').onchange = () => go($('date').value || today());
-  $('today').onclick = () => go(today());
-  $('tmr').onclick = () => go(addDays(today(), 1));
   $('prev').onclick = () => go(addDays($('date').value || today(), -1));
   $('next').onclick = () => go(addDays($('date').value || today(), 1));
-  $('reload').onclick = () => load(false);
   $('allOn').onclick = () => { hidden.clear(); renderList(); draw(true); };
   $('allOff').onclick = () => { if (!data) return; data.tasks.filter(matchQ).forEach(t => hidden.add(t.task_code)); focus = null; renderList(); draw(false); };
   bindSearch(() => { if (!data) return; if (focus && !data.tasks.some(t => t.task_code === focus && matchQ(t))) focus = null; renderList(); draw(true); });

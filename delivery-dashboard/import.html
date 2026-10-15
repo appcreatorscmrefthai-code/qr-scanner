@@ -46,7 +46,7 @@ td.cx{color:#ffb3bd}
   <h1>นำเข้าแผนจัดส่ง</h1>
   <div class="right">
     <a class="nav" href="index.html">ปฏิทิน</a>
-    <a class="nav" href="dashboard.html">Dashboard วันนี้</a>
+    <a class="nav" href="dashboard.html">ติดตามงานวันนี้</a>
     <span id="userBox"></span>
   </div>
 </header>
@@ -65,9 +65,9 @@ td.cx{color:#ffb3bd}
   </div>
   <div class="wrap" id="wrap" hidden><table id="tbl"></table></div>
 </main>
-<script src="config.js"></script>
-<script src="api.js"></script>
-<script src="auth.js"></script>
+<script src="config.js?v=18"></script>
+<script src="api.js?v=18"></script>
+<script src="auth.js?v=18"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

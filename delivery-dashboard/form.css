@@ -82,3 +82,4 @@ a.ph:not([href]) img{visibility:hidden}
 #sentBox .grid,.sentbox .grid{grid-template-columns:repeat(5,1fr)}
 .dept{display:inline-block;font-size:.72em;vertical-align:.12em;padding:0 .5em;border-radius:6px;background:var(--amber);color:#06101f}
 .dept.qa{background:#a78bfa}
+.intl{display:inline-block;font-size:.72em;vertical-align:.12em;margin-left:.3em;padding:0 .5em;border-radius:6px;background:var(--red);color:#fff}

@@ -265,7 +265,7 @@
     // take(): ย้ายรูปทั้งหมดออกจากตัวเลือก (หลังกดบันทึก) เพื่อให้ผู้ใช้เลือกรูปชุดถัดไปได้ทันที
     return { items, kind: p.kind, key: p.key, root, take() { const a = items.splice(0); draw(); return a; },
       clear() { items.splice(0).forEach(x => URL.revokeObjectURL(x.url)); draw(); },
-      setSent(n) { n = Number(n) || 0; if (n !== sent) { sent = n; draw(); } }, get sent() { return sent; }, get room() { return room(); } };
+      setSent(n) { n = Number(n) || 0; if (n !== sent) { sent = n; draw(); } }, get sent() { return sent; }, get room() { return room(); }, redraw: draw };
   }
 
   /* ---------- รูปที่ส่งแล้ว (ดูได้อย่างเดียว ลบไม่ได้) ----------
@@ -289,9 +289,10 @@
     const key = JSON.stringify(gs.map(g => [g.label, g.max, g.paths]));
     if (box.dataset.key === key) return gs.length;              // ไม่เปลี่ยน ไม่ต้องวาดใหม่ (หน้าโหลดสถานะซ้ำทุก 30 วินาที)
     box.dataset.key = key;
-    box.innerHTML = gs.map(g => `<div class="sg"><span>${esc(g.label)}</span><b>${g.max ? `ส่งแล้ว ${g.paths.length}/${g.max}` : g.paths.length} รูป</b></div>
-      <div class="grid">${g.paths.map((x, i) => `<a class="ph" data-p="${esc(x)}" target="_blank" rel="noopener"><img alt="${esc(g.label)} รูปที่ ${i + 1}"></a>`).join('')}</div>`).join('')
+    box.innerHTML = gs.map((g, gi) => `<div class="sg"><span>${esc(g.label)}</span><b>${g.max ? `ส่งแล้ว ${g.paths.length}/${g.max}` : g.paths.length} รูป</b></div>
+      <div class="grid">${g.paths.map((x, i) => `<a class="ph" data-p="${esc(x)}" data-vg="g${gi}" data-cap="${esc(g.label)} · รูปที่ ${i + 1}/${g.paths.length}" target="_blank" rel="noopener"><img alt="${esc(g.label)} รูปที่ ${i + 1}" loading="lazy"></a>`).join('')}</div>`).join('')
       + (gs.length ? '<div class="meter">รูปที่ส่งแล้วดูได้อย่างเดียว ลบหรือแก้ไขไม่ได้ ถ้าส่งผิดกรุณาแจ้งผู้ดูแลระบบ</div>' : '');
+    if (window.Viewer) Viewer.bind(box);                        // กดรูปย่อแล้วเลื่อนดูรูปในชุดเดียวกันได้
     const all = gs.flatMap(g => g.paths);
     if (all.length) signUrls(all).then(c => box.querySelectorAll('a[data-p]').forEach(a => {
       const u = c.get(a.dataset.p); if (u) { a.href = u.url; a.firstElementChild.src = u.url; }

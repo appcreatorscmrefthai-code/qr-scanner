@@ -64,11 +64,11 @@ footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:
   <div class="ctl">
     <button id="prev" aria-label="เดือนก่อน">‹</button><h2 id="title"></h2><button id="next" aria-label="เดือนถัดไป">›</button>
     <button id="thisMonth">เดือนนี้</button>
-    <a class="btn" href="dashboard.html">Dashboard วันนี้</a>
-    <a class="btn" href="gps.html">Summary</a>
-    <a class="btn" href="route.html">Route Plan</a>
+    <a class="btn" href="dashboard.html" title="Dashboard ติดตามสถานะรถของวันนี้">ติดตามงานวันนี้</a>
+    <a class="btn" href="gps.html" title="ภาพรวมรถทุกคันบนแผนที่ + Delay Trend">สรุปภาพรวมวันนี้</a>
+    <a class="btn" href="route.html" title="วางแผนเส้นทางจัดส่งบนแผนที่">วางแผนเส้นทาง</a>
     <a class="btn" href="backup.html" id="backupLink" hidden>Backup</a>
-    <a class="btn" href="eta.html">ตั้งค่า ETA / GPS</a>
+    <a class="btn" href="eta.html" title="ตั้งค่า ETA / GPS / พิกัดต้นทาง">ตั้งค่า</a>
     <span id="userBox" style="font-size:.8em;color:var(--muted);white-space:nowrap"></span>
   </div>
 </header>
@@ -80,9 +80,9 @@ footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:
   <div class="legend"><span style="--c:var(--green)">จบงานครบ</span><span style="--c:var(--amber)">กำลังดำเนินการ / ยังไม่ถึงวัน</span><span style="--c:var(--red)">ผ่านวันแล้วยังจบงานไม่ครบ</span><span style="--c:#ffb3bd">ยกเลิก (กดดูรายการได้)</span></div>
   <div id="updated"></div>
 </footer>
-<script src="config.js"></script>
-<script src="api.js"></script>
-<script src="auth.js"></script>
+<script src="config.js?v=18"></script>
+<script src="api.js?v=18"></script>
+<script src="auth.js?v=18"></script>
 <script>
 const CFG = window.APP_CONFIG || {}, DEMO = !SB.ON;
 const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
