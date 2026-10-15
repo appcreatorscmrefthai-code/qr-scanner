@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0f766e">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="form.css?v=18">
+<link rel="stylesheet" href="form.css?v=19">
 </head>
 <body>
 <div class="wrap">
@@ -29,19 +29,20 @@
       <button class="btn primary" id="scanBtn" type="button" hidden>เปิดกล้องสแกน QR ประจำงาน</button>
     </div>
 
-    <!-- งานต่างประเทศ (WH) : รูปรถเข้า + บันทึกเวลารถเข้า -->
+    <!-- งานต่างประเทศ (WH) : รูปรถเข้า (ส่งครั้งแรก = เวลารถเข้า) -->
     <div class="card" id="inCard" hidden>
-      <h2>2. รูปรถเข้า <small>ไม่เกิน 20 รูป · บันทึกเวลารถเข้า</small></h2>
+      <h2>2. รูปรถเข้า <small>รวมไม่เกิน 20 รูป · ส่งครั้งแรก = เวลารถเข้า</small></h2>
       <div id="inDone" class="okline" hidden></div>
       <div id="inSent" class="sentbox"></div>
       <div id="inBody">
         <div id="pkIn"></div>
-        <button class="btn finish" id="inBtn" type="button" style="margin-top:12px">ส่งรูปรถเข้า และบันทึกเวลารถเข้า</button>
+        <button class="btn primary" id="inBtn" type="button" style="margin-top:12px">ส่งรูปรถเข้า</button>
       </div>
     </div>
 
     <div class="card">
       <h2><span id="phTitle">2. รูปส่งงาน</span> <small id="phNote">รวมไม่เกิน 20 รูป · ครั้งละไม่เกิน 50 MB</small></h2>
+      <div id="outInfo" class="meter" hidden></div>
       <div id="sentBox" class="sentbox"></div>
       <div id="pkPhotos" style="margin-top:10px"></div>
     </div>
@@ -55,13 +56,6 @@
 
     <div class="btns"><button class="btn primary" id="sendBtn" type="button" disabled>ส่งข้อมูล</button></div>
 
-    <!-- งานต่างประเทศ (WH) : บันทึกรถออก = จบงาน -->
-    <div class="card" id="outCard" hidden style="margin-top:14px">
-      <h2>5. รถออก <small>กดเมื่อรถออกจาก SCM แล้ว (จบงาน)</small></h2>
-      <div id="outDone" class="okline" hidden></div>
-      <div id="outHint" class="meter"></div>
-      <button class="btn finish" id="outBtn" type="button" style="margin-top:10px">บันทึกรถออก</button>
-    </div>
   </div>
 
   <div id="doneBox" class="card done" hidden>
@@ -76,10 +70,10 @@
   <div class="btns"><button class="btn finish" id="cfYes" type="button">ยืนยัน</button><button class="btn ghost" id="cfNo" type="button">ยกเลิก</button></div>
 </dialog>
 <script>window.UPLOAD_DEPT = 'WH';</script>
-<script src="config.js?v=18"></script>
-<script src="api.js?v=18"></script>
-<script src="form.js?v=18"></script>
-<script src="viewer.js?v=18"></script>
-<script src="upload.js?v=18"></script>
+<script src="config.js?v=19"></script>
+<script src="api.js?v=19"></script>
+<script src="form.js?v=19"></script>
+<script src="viewer.js?v=19"></script>
+<script src="upload.js?v=19"></script>
 </body>
 </html>

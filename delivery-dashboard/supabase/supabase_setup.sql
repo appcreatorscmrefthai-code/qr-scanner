@@ -1,5 +1,5 @@
 -- =====================================================================
--- Delivery Plan : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.15-s18)
+-- Delivery Tracking : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.15-s19)
 -- วิธีใช้ : Supabase > SQL Editor > New query > วางทั้งไฟล์นี้ > กด Run
 -- รันซ้ำได้ ข้อมูลเดิมไม่หาย (ใช้ตอนผมส่งรุ่นแก้ไขมาให้)
 -- =====================================================================
@@ -256,6 +256,11 @@ begin
   if p->>'form' in ('pickup', 'qa') then
     -- รูปส่งงาน WH (pickup.html) / QA (qa.html) : ส่งได้หลายครั้งจนกว่าจะผ่าน 24 ชม. นับจากอัปโหลดครั้งล่าสุดของฝ่ายนั้น รวมไม่เกิน WH 20 / QA 50 รูป
     v_dept := case when p->>'form' = 'qa' then 'QA' else 'WH' end;
+    -- งานต่างประเทศ WH : ต้องส่งรูปรถเข้าก่อน ; ส่งรูปส่งงานครั้งแรก = เวลารถออก (จบงาน)
+    if v_dept = 'WH' and public.is_intl(t.vehicle_type)
+       and not exists (select 1 from public.road_log where task_code = t.task_code and type = 'checkin') then
+      raise exception 'กรุณาส่งรูปรถเข้า (หัวข้อ 2) ก่อนส่งรูปส่งงาน';
+    end if;
     select max(time) into v_last from public.pickup_log where task_code = t.task_code and source <> 'GPS' and dept = v_dept;
     if v_last is not null and v_now > v_last + interval '24 hours' then
       raise exception 'ปิดรับรูปจาก % แล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)', v_dept;
@@ -266,15 +271,29 @@ begin
     end if;
     ph := public.photo_list(p->'photos', pre, public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) - v_have, t.key);
     insert into public.pickup_log (time, task_code, note, photos, dept) values (v_now, t.task_code, v_note, coalesce(ph, '{}'), v_dept) returning id into v_id;
+    if v_dept = 'WH' and public.is_intl(t.vehicle_type)
+       and not exists (select 1 from public.road_log where task_code = t.task_code and type = 'depart') then
+      v_fin := true;
+      insert into public.road_log (time, task_code, type, note, finish)
+        values (v_now, t.task_code, 'depart', 'WH ต่างประเทศ: รถออก (ส่งรูปส่งงานครั้งแรก)', true);
+    end if;
 
   elsif p->>'form' in ('wh_in', 'wh_out') then
-    -- งานต่างประเทศ : WH บันทึกรถเข้า (พร้อมรูปรถเข้า ไม่เกิน 20 รูป) / รถออก (= จบงาน) จากฟอร์มอัปโหลดรูป WH
+    -- งานต่างประเทศ : WH ส่งรูปรถเข้า (รวมไม่เกิน 20 รูป ส่งเพิ่มได้ภายใน 24 ชม.) ส่งครั้งแรก = เวลารถเข้า
+    -- (wh_out = ปุ่มรถออกรุ่นเก่า s18 เก็บไว้กันฟอร์มที่ค้างในมือถือ ; รุ่นนี้รถออก = ส่งรูปส่งงาน WH ครั้งแรก)
     if not public.is_intl(t.vehicle_type) then raise exception 'งานนี้ไม่ใช่งานต่างประเทศ (ประเภทรถ %)', coalesce(nullif(t.vehicle_type, ''), '-'); end if;
     if p->>'form' = 'wh_in' then
-      if exists (select 1 from public.road_log where task_code = t.task_code and type = 'checkin') then raise exception 'บันทึกรถเข้าของงานนี้ไปแล้ว'; end if;
-      ph := public.photo_list(p->'unload', pre, 20, t.key);
-      insert into public.road_log (time, task_code, type, plate, note, unload)
-        values (v_now, t.task_code, 'checkin', t.plate, left('WH ต่างประเทศ: รถเข้า' || case when v_note <> '' then ' · ' || v_note else '' end, 2000), coalesce(ph, '{}')) returning id into v_id;
+      select id, time, cardinality(unload) into v_id, v_ref, v_have from public.road_log where task_code = t.task_code and type = 'checkin' order by id limit 1;
+      if v_id is null then
+        ph := public.photo_list(p->'unload', pre, 20, t.key);
+        insert into public.road_log (time, task_code, type, plate, note, unload)
+          values (v_now, t.task_code, 'checkin', t.plate, left('WH ต่างประเทศ: รถเข้า (ส่งรูปรถเข้าครั้งแรก)' || case when v_note <> '' then ' · ' || v_note else '' end, 2000), coalesce(ph, '{}')) returning id into v_id;
+      else
+        if v_now > v_ref + interval '24 hours' then raise exception 'ปิดรับรูปรถเข้าแล้ว (เกิน 24 ชม. นับจากรถเข้า)'; end if;
+        if v_have >= 20 and not v_pend then raise exception 'ส่งรูปรถเข้าครบ 20 รูปแล้ว ส่งเพิ่มไม่ได้'; end if;
+        ph := public.photo_list(p->'unload', pre, greatest(0, 20 - v_have), t.key);
+        if coalesce(array_length(ph, 1), 0) > 0 then update public.road_log set unload = unload || ph where id = v_id; end if;
+      end if;
     else
       if not exists (select 1 from public.road_log where task_code = t.task_code and type = 'checkin') then raise exception 'ยังไม่ได้บันทึกรถเข้า'; end if;
       select id into v_id from public.road_log where task_code = t.task_code and type = 'depart' order by id limit 1;

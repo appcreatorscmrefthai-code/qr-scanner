@@ -2,8 +2,8 @@ Attribute VB_Name = "modDeliveryPlan"
 Option Explicit
 
 ' ============================================================================
-'  Delivery Plan : ปุ่มใน Excel สำหรับส่งแผนขึ้นระบบ และดึงข้อมูลกลับลงไฟล์
-'  รุ่น 2026.10.14-y2  (Pickup_Log แยกฝ่าย WH / QA)
+'  Delivery Tracking : ปุ่มใน Excel สำหรับส่งแผนขึ้นระบบ และดึงข้อมูลกลับลงไฟล์  (ไฟล์ Delivery_Tracking.xlsm)
+'  รุ่น 2026.10.15-y3  (เพิ่ม DP_WebNextSeq ให้ modImportCalendar เติม Task Code จากเลขล่าสุดบนเว็บ / เปลี่ยนชื่อเป็น Delivery Tracking)
 '
 '  โครงสร้างไฟล์ (รุ่นนี้)
 '    Plan         = ชีตสำหรับ "ส่งค่า" อย่างเดียว : พิมพ์/วางงานใหม่ แล้วกด ส่งงานใหม่ขึ้นระบบ
@@ -37,7 +37,7 @@ Private Const SB_URL As String = "https://crtqzyhuntrhzvaztcew.supabase.co"
 Private Const SB_KEY As String = "sb_publishable_B1LhtrrMidiBuhYXnGm8TQ_zuxkLNEe"
 Private Const LOGIN_DOMAIN As String = "scmdelivery.local"
 
-Private Const APP_TITLE As String = "Delivery Plan"
+Private Const APP_TITLE As String = "Delivery Tracking"
 Private Const PLAN_SHEET As String = "Plan"            ' ชีตส่งงานใหม่ (ส่งค่าอย่างเดียว)
 Private Const BACKUP_SHEET As String = "Plan_Backup"   ' ชีตสำรองงานจากเว็บ และใช้แก้งานเดิม
 Private Const NCOL As Long = 25            ' คอลัมน์ A ถึง Y ของชีต Plan / Plan_Backup
@@ -448,7 +448,7 @@ Private Function GetToken() As String
         mToken = ""
         mRefresh = ""
     End If
-    email = Trim$(Ask("เข้าสู่ระบบ Delivery Plan" & vbCrLf & vbCrLf & "อีเมลหรือชื่อผู้ใช้ (ต้องเป็นผู้ใช้ที่มีสิทธิ์แก้ไข)", mEmail))
+    email = Trim$(Ask("เข้าสู่ระบบ Delivery Tracking" & vbCrLf & vbCrLf & "อีเมลหรือชื่อผู้ใช้ (ต้องเป็นผู้ใช้ที่มีสิทธิ์แก้ไข)", mEmail))
     If Len(email) = 0 Then Exit Function
     email = LCase$(email)
     If InStr(email, "@") = 0 Then email = email & "@" & LOGIN_DOMAIN
@@ -1372,6 +1372,25 @@ Private Function RpcJson(ByVal fn As String, ByVal body As String, ByRef ok As B
         Exit Function
     End If
     RpcJson = r
+End Function
+
+' เลขลำดับ Task Code ถัดไปของวันที่ d ตามข้อมูลล่าสุดบนเว็บ (D20261016-04 -> 4)  ใช้โดย modImportCalendar
+' ok = False เมื่อเชื่อมต่อไม่ได้/ยกเลิกการเข้าสู่ระบบ (มีหน้าต่างเข้าสู่ระบบถ้ายังไม่ได้เข้า)
+Public Function DP_WebNextSeq(ByVal d As Date, ByRef ok As Boolean) As Long
+    Dim r As String, p As Long
+    On Error GoTo Bad
+    r = RpcJson("plan_next_code", "{""p_date"":""" & IsoDate(d) & """}", ok)
+    If Not ok Then Exit Function
+    r = Trim$(Replace(Replace(r, """", ""), vbLf, ""))
+    p = InStrRev(r, "-")
+    If p = 0 Or Not IsNumeric(Mid$(r, p + 1)) Then
+        ok = False
+        Exit Function
+    End If
+    DP_WebNextSeq = CLng(Mid$(r, p + 1))
+    Exit Function
+Bad:
+    ok = False
 End Function
 
 ' แบ่งช่วงวันที่เป็นรายปีปฏิทิน (ระบบจำกัดช่วงต่อครั้ง) : ชุดของข้อความ "จาก|ถึง" (ปปปป-ดด-วว)

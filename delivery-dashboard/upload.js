@@ -2,7 +2,8 @@
    - งานในประเทศ : ส่งได้หลายครั้ง รวมไม่เกิน WH 20 รูป / QA 50 รูป (ครั้งละไม่เกิน 50 MB)
    - งานต่างประเทศ (ประเภทรถ CL 20FT / CL 40FT / CL 40HC / LCL / DHL) : หน้าเดิมเปลี่ยนเป็นโหมดต่างประเทศเอง
        WH และ QA รวมไม่เกิน 300 รูป (ครั้งละไม่เกิน 300 MB)
-       WH มีเพิ่ม : รูปรถเข้า (บันทึกเวลารถเข้า) และปุ่มรถออก (บันทึกเวลารถออก = จบงาน)
+       WH มีเพิ่ม : 2. รูปรถเข้า (ส่งครั้งแรก = เวลารถเข้า) และ 3. รูปส่งงาน (ส่งครั้งแรก = เวลารถออก = จบงาน)
+       ต้องส่งรูปรถเข้าก่อน จึงส่งรูปส่งงานได้ ; ส่งรูปเพิ่มทั้ง 2 หัวข้อได้ เวลารถเข้า-ออกยึดการส่งครั้งแรก
    - เปิดรับรูปส่งงานจนครบ 24 ชม. นับจากอัปโหลดครั้งล่าสุดของฝ่ายนั้น
    - เห็นรูปที่ส่งไปแล้ว (ดูอย่างเดียว ลบไม่ได้) และจำนวนที่ส่งเพิ่มได้ */
 (function () {
@@ -17,6 +18,7 @@
   const logOf = type => ((task && task.logs) || []).find(l => l.type === type);
   const show = (id, on) => { const el = $(id); if (el) el.hidden = !on; };
   const durTh = m => m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ' ' + (m % 60) + ' นาที' : ''}` : `${m} นาที`;
+  let needIn = false;                                   // งานต่างประเทศ WH ที่ยังไม่ได้ส่งรูปรถเข้า : ยังส่งรูปส่งงานไม่ได้
 
   // โหมดต่างประเทศ : ปรับหัวข้อ / จำนวนรูป / ส่วนรถเข้า-รถออก (WH)
   function applyMode() {
@@ -28,20 +30,24 @@
     $('phTitle').textContent = (wh ? '3' : '2') + '. รูปส่งงาน';
     $('noteTitle').textContent = (wh ? '4' : '3') + '. หมายเหตุ';
     $('sendBtn').textContent = wh ? 'ส่งรูปส่งงาน' : 'ส่งข้อมูล';
-    if (intl) $('sub').textContent = `งานต่างประเทศ (${info.label}) ${DEPT === 'WH' ? 'บันทึกรูปรถเข้า > ส่งรูปส่งงาน > กดรถออก' : 'อัปโหลดรูปตรวจสินค้า'} · ส่งรูปเพิ่มได้จนครบ 24 ชม. นับจากอัปโหลดครั้งล่าสุด`;
-    show('inCard', wh); show('outCard', wh);
+    if (intl) $('sub').textContent = `งานต่างประเทศ (${info.label}) ${DEPT === 'WH' ? 'ส่งรูปรถเข้า (= เวลารถเข้า) > ส่งรูปส่งงาน (= เวลารถออก)' : 'อัปโหลดรูปตรวจสินค้า'} · ส่งรูปเพิ่มได้จนครบ 24 ชม. นับจากอัปโหลดครั้งล่าสุด`;
+    show('inCard', wh); show('outInfo', wh);
+    needIn = false;
     if (!wh) return;
-    const ck = logOf('checkin'), dp = logOf('depart');
-    show('inDone', !!ck); show('inBody', !ck);
-    if (ck) $('inDone').textContent = `✓ รถเข้าแล้ว ${hhmm(ck.time)} น.`;
+    const ck = logOf('checkin'), dp = logOf('depart'), inN = ck ? (ck.unload || []).length : 0;
+    const inClosed = ck && Date.now() > new Date(ck.time).getTime() + 24 * 3600e3;
+    needIn = !ck;
+    show('inDone', !!ck);
+    if (ck) $('inDone').textContent = `✓ รถเข้า ${hhmm(ck.time)} น. (เวลาที่ส่งรูปรถเข้าครั้งแรก)` + (inClosed ? ' · ปิดรับรูปรถเข้าแล้ว (เกิน 24 ชม.)' : '');
     DF.sentBox('inSent', [{ label: 'รูปรถเข้าที่ส่งแล้ว', paths: ck ? ck.unload || [] : [], max: 20 }]);
-    show('outDone', !!dp); show('outBtn', !dp);
-    if (dp) { $('outDone').textContent = `✓ รถออกแล้ว ${hhmm(dp.time)} น. (จบงาน)`; $('outHint').textContent = ''; }
-    else if (!ck) { $('outBtn').disabled = true; $('outHint').textContent = 'บันทึกรถเข้าก่อน ปุ่มนี้จึงจะกดได้'; }
+    pkIn.setSent(inN);
+    show('inBody', !inClosed && inN < 20);
+    $('inBtn').textContent = ck ? 'ส่งรูปรถเข้าเพิ่ม' : 'ส่งรูปรถเข้า';
+    if (dp) $('outInfo').innerHTML = `<span class="okline">✓ รถออก ${hhmm(dp.time)} น. (เวลาที่ส่งรูปส่งงานครั้งแรก) · จบงาน</span>`;
+    else if (!ck) $('outInfo').textContent = 'ส่งรูปรถเข้า (หัวข้อ 2) ก่อน จึงส่งรูปส่งงานได้ · การส่งรูปส่งงานครั้งแรกจะบันทึกเป็นเวลารถออก (จบงาน)';
     else {
       const m = Math.round((Date.now() - new Date(ck.time)) / 60000);
-      $('outBtn').disabled = false;
-      $('outHint').textContent = `รถอยู่ที่ SCM แล้ว ${durTh(Math.max(0, m))} (เกณฑ์ ${info.label} ไม่เกิน ${durTh(info.min)})`;
+      $('outInfo').textContent = `รถอยู่ที่ SCM แล้ว ${durTh(Math.max(0, m))} (เกณฑ์ ${info.label} ไม่เกิน ${durTh(info.min)}) · การส่งรูปส่งงานครั้งแรกจะบันทึกเป็นเวลารถออก (จบงาน)`;
     }
   }
 
@@ -64,6 +70,7 @@
         if (closed) { $('sendBtn').disabled = true; DF.say(`ปิดรับรูปจาก ${DEPT} แล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)`); return; }
       }
       if (sent.length >= MAX) { $('sendBtn').disabled = true; DF.say(`ส่งรูปจาก ${DEPT} ครบ ${MAX} รูปแล้ว ส่งเพิ่มไม่ได้`, 'info'); return; }
+      if (needIn) $('sendBtn').disabled = true;
       DF.say('');
     } catch (e) {
       task = null; $('scanBtn').hidden = false; $('sendBtn').disabled = true;
@@ -96,26 +103,20 @@
   }
 
   $('sendBtn').onclick = async () => {
+    if (needIn) return DF.say('กรุณาส่งรูปรถเข้า (หัวข้อ 2) ก่อน');
     if (!picker.items.length) return DF.say('กรุณาแนบรูปส่งงานอย่างน้อย 1 รูป');
+    const first = DEPT === 'WH' && task && SB.intlInfo(task.vehicleType) && !logOf('depart');
     $('sendBtn').disabled = true;
-    if (await send({ form: FORM, note: $('note').value.trim() }, [picker], `บันทึกรูปส่งงานจาก ${DEPT} เรียบร้อย`)) $('note').value = '';
+    if (await send({ form: FORM, note: $('note').value.trim() }, [picker], first ? 'บันทึกรูปส่งงานและเวลารถออกเรียบร้อย (จบงาน)' : `บันทึกรูปส่งงานจาก ${DEPT} เรียบร้อย`)) $('note').value = '';
     $('sendBtn').disabled = !task;
   };
+  // รูปรถเข้า (งานต่างประเทศ WH) : ส่งครั้งแรก = เวลารถเข้า ส่งเพิ่มได้รวมไม่เกิน 20 รูป
   if (pkIn) $('inBtn').onclick = async () => {
     if (!pkIn.items.length) return DF.say('กรุณาแนบรูปรถเข้าอย่างน้อย 1 รูป');
-    if (!(await DF.confirmBox('บันทึกเวลารถเข้าเป็นเวลานี้ พร้อมส่งรูปรถเข้า ?', 'ยืนยันรถเข้า'))) return;
-    await send({ form: 'wh_in', note: '' }, [pkIn], 'บันทึกรถเข้าเรียบร้อย');
-  };
-  if (pkIn) $('outBtn').onclick = async () => {
-    if (busy || !task) return;
-    if (!(await DF.confirmBox('ยืนยันว่ารถออกจาก SCM แล้ว ? ระบบจะบันทึกเวลารถออกและจบงานนี้', 'ยืนยันรถออก'))) return;
-    busy = true; $('outBtn').disabled = true; DF.say('กำลังบันทึกรถออก…', 'info');
-    try {
-      await DF.retry(() => DF.apiPost({ action: 'submit', form: 'wh_out', taskCode: task.taskCode }, true), 2);
-      DF.toast('บันทึกรถออกเรียบร้อย'); DF.say('');
-    } catch (e) { DF.say('บันทึกรถออกไม่สำเร็จ: ' + (e.message || e)); }
-    busy = false;
-    await load(task.taskCode);
+    const first = !logOf('checkin');
+    $('inBtn').disabled = true;
+    await send({ form: 'wh_in', note: '' }, [pkIn], first ? 'บันทึกรูปรถเข้าและเวลารถเข้าเรียบร้อย' : 'บันทึกรูปรถเข้าเพิ่มเรียบร้อย');
+    $('inBtn').disabled = false;
   };
   // ดูรูปที่ส่งแล้ว / ส่งเพิ่ม : โหลดข้อมูลงานใหม่แล้วกลับไปหน้าฟอร์ม
   $('moreBtn').onclick = async () => {

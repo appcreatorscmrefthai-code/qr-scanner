@@ -43,9 +43,11 @@
       return SB.call(path, { token: (Auth.get() || {}).access, body });
     }
   }
+  // ชื่อไฟล์บนระบบ : Delivery_Tracking_Backup_(latest|YYYYMMDD).xlsx  (ชื่อเดิม Delivery_Backup_... ยังแสดงได้ จนกว่าบอต b6 เปลี่ยนชื่อให้)
+  const FILE_RE = /^Delivery_(?:Tracking_)?Backup_(latest|\d{8})\.xlsx$/;
   const fileLabel = n => {
-    if (n === 'Delivery_Backup_latest.xlsx') return 'ล่าสุด';
-    const m = n.match(/^Delivery_Backup_(\d{8})\.xlsx$/);
+    if (/^Delivery_(?:Tracking_)?Backup_latest\.xlsx$/.test(n)) return 'ล่าสุด';
+    const m = n.match(/^Delivery_(?:Tracking_)?Backup_(\d{8})\.xlsx$/);
     return m ? 'คืนวันที่ ' + thaiDate(m[1]) : n;
   };
   async function download(name, btn) {
@@ -98,9 +100,12 @@
     const box = $('files'), btn = $('dlLatest');
     try {
       const rows = (await store('/storage/v1/object/list/backups', { prefix: '', limit: 100, offset: 0, sortBy: { column: 'name', order: 'desc' } })) || [];
-      const seen = new Set(), all = rows.filter(r => /^Delivery_Backup_(latest|\d{8})\.xlsx$/.test(r.name || '') && !seen.has(r.name) && seen.add(r.name));
-      const latest = all.find(r => r.name === 'Delivery_Backup_latest.xlsx');
-      const dated = all.filter(r => r !== latest).sort((a, b) => a.name < b.name ? 1 : -1);
+      // ชื่อใหม่มาก่อน : ไฟล์วันเดียวกันที่มีทั้งชื่อใหม่และชื่อเดิม แสดงเฉพาะชื่อใหม่
+      const isNew = r => r.name.startsWith('Delivery_Tracking_');
+      const seen = new Set(), all = rows.filter(r => FILE_RE.test(r.name || '')).sort((a, b) => isNew(b) - isNew(a))
+        .filter(r => { const k = r.name.match(FILE_RE)[1]; return !seen.has(k) && seen.add(k); });
+      const latest = all.find(r => r.name.match(FILE_RE)[1] === 'latest');
+      const dated = all.filter(r => r !== latest).sort((a, b) => a.name.match(FILE_RE)[1] < b.name.match(FILE_RE)[1] ? 1 : -1);
       if (latest) {
         btn.disabled = false; btn.onclick = () => download(latest.name, btn);
         $('latestInfo').textContent = `อัปเดตเมื่อ ${thaiDT(latest.updated_at || latest.created_at)}${latest.metadata && latest.metadata.size ? ' · ' + size(latest.metadata.size) : ''}`;
@@ -241,7 +246,7 @@
         ['หมายเหตุ', 'ไฟล์นี้ไม่รวมงานที่ถูกลบออกจากระบบแล้ว (ดูได้ในไฟล์ Backup รายคืน) · รูปต้นฉบับเก็บที่เครื่อง Admin ตาม Task Code'], ['หมายเหตุเวลา', 'เวลาทั้งหมดเป็นเวลาไทย (UTC+7) เก็บเป็นข้อความ']];
       const wb = buildWorkbook(plan, pickup, road, edit, delay, info);
       const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const name = `Delivery_Backup_${stamp}.xlsx`;
+      const name = `Delivery_Tracking_Backup_${stamp}.xlsx`;
       saveBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
       prog(`สร้างไฟล์ ${name} แล้ว (${plan.length.toLocaleString('en-US')} งาน, Road ${road.length.toLocaleString('en-US')} แถว, ${size(out.byteLength)})`, 'ok');
     } catch (e) { prog(friendly(e), 'err'); }
