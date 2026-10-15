@@ -45,16 +45,17 @@
       <div id="outInfo" class="meter" hidden></div>
       <div id="sentBox" class="sentbox"></div>
       <div id="pkPhotos" style="margin-top:10px"></div>
+      <div id="phTail"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="noteCard">
       <h2><label for="note" id="noteTitle">3. หมายเหตุ</label></h2>
-      <textarea id="note" maxlength="2000" placeholder="ถ้ามี"></textarea>
+      <div id="noteBox"><textarea id="note" maxlength="2000" placeholder="ถ้ามี"></textarea></div>
     </div>
 
     <div class="card stamp"><span>วันที่และเวลา (บันทึกอัตโนมัติ)</span><b id="stamp"></b></div>
 
-    <div class="btns"><button class="btn primary" id="sendBtn" type="button" disabled>ส่งข้อมูล</button></div>
+    <div class="btns" id="sendWrap"><button class="btn primary" id="sendBtn" type="button" disabled>ส่งข้อมูล</button></div>
 
   </div>
 
@@ -74,6 +75,6 @@
 <script src="api.js?v=19"></script>
 <script src="form.js?v=19"></script>
 <script src="viewer.js?v=19"></script>
-<script src="upload.js?v=19"></script>
+<script src="upload.js?v=20"></script>
 </body>
 </html>

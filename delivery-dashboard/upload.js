@@ -18,7 +18,21 @@
   const logOf = type => ((task && task.logs) || []).find(l => l.type === type);
   const show = (id, on) => { const el = $(id); if (el) el.hidden = !on; };
   const durTh = m => m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ' ' + (m % 60) + ' นาที' : ''}` : `${m} นาที`;
-  let needIn = false;                                   // งานต่างประเทศ WH ที่ยังไม่ได้ส่งรูปรถเข้า : ยังส่งรูปส่งงานไม่ได้
+  let needIn = false;                                  // งานต่างประเทศ WH ที่ยังไม่ได้ส่งรูปรถเข้า : ยังส่งรูปส่งงานไม่ได้
+  // งานต่างประเทศ WH : ย้ายหมายเหตุ + ปุ่มส่งเข้าไปในหัวข้อ 3 (แบบเดียวกับหัวข้อ 2) ; งานอื่นอยู่ที่เดิม
+  const homeWrap = document.createComment('sendWrap'), noteLbl = document.createElement('label');
+  $('sendWrap').before(homeWrap);
+  noteLbl.htmlFor = 'note'; noteLbl.className = 'tailLbl'; noteLbl.textContent = 'หมายเหตุ (ถ้ามี)';
+  noteLbl.style.cssText = 'display:block;margin:14px 0 6px;font-weight:600';
+  function placeSend(inCard) {
+    const note = $('note'), wrap = $('sendWrap');
+    if (inCard) {
+      $('phTail').append(noteLbl, note, wrap); wrap.style.marginTop = '12px';
+    } else {
+      noteLbl.remove(); $('noteBox').append(note); homeWrap.after(wrap); wrap.style.marginTop = '';
+    }
+    show('noteCard', !inCard);
+  }
 
   // โหมดต่างประเทศ : ปรับหัวข้อ / จำนวนรูป / ส่วนรถเข้า-รถออก (WH)
   function applyMode() {
@@ -31,7 +45,7 @@
     $('noteTitle').textContent = (wh ? '4' : '3') + '. หมายเหตุ';
     $('sendBtn').textContent = wh ? 'ส่งรูปส่งงาน' : 'ส่งข้อมูล';
     if (intl) $('sub').textContent = `งานต่างประเทศ (${info.label}) ${DEPT === 'WH' ? 'ส่งรูปรถเข้า (= เวลารถเข้า) > ส่งรูปส่งงาน (= เวลารถออก)' : 'อัปโหลดรูปตรวจสินค้า'} · ส่งรูปเพิ่มได้จนครบ 24 ชม. นับจากอัปโหลดครั้งล่าสุด`;
-    show('inCard', wh); show('outInfo', wh);
+    show('inCard', wh); show('outInfo', wh); placeSend(wh);
     needIn = false;
     if (!wh) return;
     const ck = logOf('checkin'), dp = logOf('depart'), inN = ck ? (ck.unload || []).length : 0;
