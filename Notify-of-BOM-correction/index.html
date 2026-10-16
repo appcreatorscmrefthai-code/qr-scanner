@@ -9,8 +9,9 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png?v=2">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=2">
-<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="manifest" href="manifest.webmanifest?v=3">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="แจ้งแก้ไข BOM">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,17 +31,21 @@
   h1, h2, h3 { margin: 0; }
   button { font: inherit; cursor: pointer; }
   input, select, textarea { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
 
   /* ---------- Layout ---------- */
   header { position: sticky; top: 0; z-index: 10; background: var(--card); border-bottom: 1px solid var(--line); }
-  .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; max-width: 760px; margin: 0 auto; }
-  .topbar h1 { font-size: 18px; flex: 1; }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; max-width: 760px; margin: 0 auto; }
+  .topbar h1 { font-size: 18px; flex: 1; white-space: nowrap; }
+  .user-chip { font-size: 12px; color: var(--muted); text-align: right; line-height: 1.3; }
+  .user-chip b { color: var(--ink); font-size: 13px; }
   .tabs { display: flex; gap: 6px; max-width: 760px; margin: 0 auto; padding: 0 14px 10px; }
   .tab { flex: 1; text-align: center; padding: 9px 4px; border-radius: 8px; border: 1px solid var(--line);
     background: #fff; color: var(--muted); font-weight: 600; font-size: 14px; }
   .tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
   main { max-width: 760px; margin: 0 auto; padding: 14px; padding-bottom: 60px; }
+  body.wide main, body.wide .topbar, body.wide .tabs { max-width: 1500px; }
   .view { display: none; }
   .view.active { display: block; }
 
@@ -55,10 +60,11 @@
   .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
   .field .req { color: var(--red); }
   .field .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .field input[type=text], .field input[type=number], .field input[type=date],
-  .field select, .field textarea {
+  .field input[type=text], .field input[type=number], .field input[type=date], .field input[type=password],
+  .field input[type=email], .field select, .field textarea {
     width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
   }
+  .field input[readonly] { background: var(--gray-bg); color: var(--ink); }
   .field textarea { resize: vertical; min-height: 56px; }
   .scan-row { display: flex; gap: 8px; }
   .scan-row input { flex: 1; min-width: 0; }
@@ -76,9 +82,11 @@
   button.btn { padding: 10px 16px; border-radius: 8px; border: 1px solid transparent; font-weight: 600; }
   .btn-primary { background: var(--blue); color: #fff; }
   .btn-success { background: var(--green); color: #fff; }
-  .btn-ghost { background: #fff; color: var(--blue); border-color: var(--line); }
+  .btn-danger { background: #fff; color: var(--red); border-color: #f1c4bf !important; }
+  .btn-ghost { background: #fff; color: var(--blue); border-color: var(--line) !important; }
   .btn-done { background: #9aa3ad; color: #fff; }
   .btn-block { width: 100%; }
+  .btn-small { padding: 5px 10px !important; font-size: 12px; white-space: nowrap; }
   button.btn:disabled { opacity: .55; cursor: default; }
 
   .photo-pick { display: flex; align-items: center; gap: 10px; }
@@ -94,11 +102,12 @@
   .status-line.ok { color: var(--green); }
   .status-line.err { color: var(--muted); }
 
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .badge.add { background: var(--green-bg); color: var(--green); }
   .badge.temp { background: var(--orange-bg); color: var(--orange); }
   .badge.perm { background: var(--blue-bg); color: var(--blue); }
   .badge.remove { background: var(--red-bg); color: var(--red); }
+  .badge.gray { background: var(--gray-bg); color: var(--muted); }
 
   .session-list { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 12px; }
   .session-item { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0;
@@ -107,10 +116,43 @@
   .session-item .name { font-weight: 600; }
   .session-item .sub { color: var(--muted); font-size: 13px; }
 
-  /* Dashboard */
-  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
-  .toolbar input { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-  .toolbar select { padding: 10px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  /* ---------- Login ---------- */
+  #loginScreen, #noAccessScreen { max-width: 420px; margin: 8vh auto 0; padding: 0 14px; }
+  .login-logo { text-align: center; margin-bottom: 16px; }
+  .login-logo img { width: 72px; height: 72px; border-radius: 16px; }
+  .login-logo h1 { font-size: 20px; margin-top: 8px; }
+  .login-note { font-size: 12px; color: var(--muted); margin-top: 10px; text-align: center; line-height: 1.6; }
+
+  /* ---------- Dashboard ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .toolbar input { flex: 1 1 220px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .toolbar select { padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .seg button { border: 0; background: #fff; padding: 8px 12px; color: var(--muted); font-weight: 600; font-size: 13px; }
+  .seg button.on { background: var(--blue); color: #fff; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .stat { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 12px; min-width: 110px; text-align: left; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 20px; font-weight: 700; }
+  .stat.on { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+
+  .bulkbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--blue-bg);
+    border: 1px solid #c9daf3; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 14px; }
+  .bulkbar .grow { flex: 1; }
+
+  .tbl-wrap { overflow: auto; max-height: calc(100vh - 290px); border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+  table.grid th, table.grid td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.grid th { position: sticky; top: 0; z-index: 2; background: #f0f3f6; color: var(--muted); font-weight: 700;
+    white-space: nowrap; font-size: 12.5px; }
+  table.grid td.nw { white-space: nowrap; }
+  table.grid td.num { text-align: right; white-space: nowrap; }
+  table.grid td.wrap { min-width: 180px; max-width: 320px; }
+  table.grid tr:hover td { background: #fafcff; }
+  table.grid tr.sel td { background: #eef4fd; }
+  table.grid a { color: var(--blue); }
+  .more { text-align: center; padding: 10px; }
 
   .task-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
     margin-bottom: 10px; }
@@ -120,9 +162,7 @@
   .task-count { background: var(--blue-bg); color: var(--blue); border-radius: 999px; padding: 2px 10px;
     font-size: 12px; font-weight: 700; white-space: nowrap; align-self: flex-end; }
   .task-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-  .btn-small { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
   .task-meta { margin-top: 6px; font-size: 12px; color: var(--muted); }
-
   .task-items { display: none; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
   .task-items.open { display: block; }
   .item-row { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -132,21 +172,26 @@
   .item-row .r2 { color: var(--muted); font-size: 13px; margin-top: 3px; }
   .item-row a.photo-link { color: var(--blue); font-size: 13px; }
 
-  /* นำเข้า Excel */
+  /* ---------- Modal ---------- */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: flex;
+    align-items: flex-start; justify-content: center; padding: 10vh 14px 14px; }
+  .modal .card { width: 100%; max-width: 440px; }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+
+  /* ---------- นำเข้า Excel / ตั้งค่า ---------- */
   .imp-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
   .imp-table { border-collapse: collapse; width: 100%; font-size: 12.5px; white-space: nowrap; }
   .imp-table th, .imp-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
   .imp-table th { background: var(--bg); color: var(--muted); font-weight: 700; position: sticky; top: 0; }
-  .imp-status-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-  .imp-status-row .label { min-width: 130px; font-size: 13px; color: var(--ink); }
-  .imp-status-row select { flex: 1; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; }
+  .imp-table td input[type=text], .imp-table td select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
   .imp-warn { color: var(--orange); font-size: 13px; margin-top: 6px; }
   .imp-count { color: var(--muted); font-size: 13px; margin-top: 4px; }
-  .imp-user { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+  .role-legend { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .role-legend b { color: var(--ink); }
 
-  @media (min-width: 560px) {
-    .toolbar select { min-width: 160px; }
+  @media (max-width: 560px) {
+    .topbar h1 { font-size: 16px; }
+    .stat { min-width: 0; flex: 1 1 40%; }
   }
 
   /* Loading overlay */
@@ -163,33 +208,74 @@
 
 <div id="loadingOverlay">
   <div class="spinner"></div>
-  <div class="txt">กำลังโหลดข้อมูล…</div>
+  <div class="txt" id="loadingText">กำลังโหลด…</div>
 </div>
 
+<!-- ====================== เข้าสู่ระบบ ====================== -->
+<section id="loginScreen" hidden>
+  <div class="login-logo">
+    <img src="icon-192.png?v=2" alt="">
+    <h1>แจ้งแก้ไข BOM</h1>
+  </div>
+  <div class="card">
+    <form id="loginForm">
+      <div class="field">
+        <label>ชื่อผู้ใช้ หรืออีเมล</label>
+        <input id="loginUser" type="text" autocomplete="username" autocapitalize="off" required>
+      </div>
+      <div class="field">
+        <label>รหัสผ่าน</label>
+        <input id="loginPass" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="loginMsg" class="msg err" hidden></div>
+      <button type="submit" id="loginBtn" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
+    </form>
+    <div class="login-note">เข้าสู่ระบบครั้งเดียว เครื่องนี้จะจำไว้ ไม่ต้องเข้าใหม่ทุกครั้ง</div>
+  </div>
+  <div class="login-note" id="installHint"></div>
+</section>
+
+<section id="noAccessScreen" hidden>
+  <div class="card">
+    <div class="msg err" id="noAccessText">บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งานระบบแจ้งแก้ไข BOM</div>
+    <div class="login-note">กรุณาติดต่อ Admin เพื่อตั้งสิทธิ์ แล้วเปิดแอปใหม่</div>
+    <button type="button" class="btn btn-ghost btn-block" style="margin-top:12px;" data-logout>ออกจากระบบ</button>
+  </div>
+</section>
+
+<!-- ====================== แอป ====================== -->
+<div id="appShell" hidden>
 <header>
-  <div class="topbar"><h1>แจ้งแก้ไข BOM</h1></div>
+  <div class="topbar">
+    <h1>แจ้งแก้ไข BOM</h1>
+    <button type="button" id="installBtn" class="btn btn-ghost btn-small" hidden>ติดตั้งแอป</button>
+    <div class="user-chip"><b id="meName"></b><br><span id="meRole"></span></div>
+    <button type="button" class="btn btn-ghost btn-small" data-logout>ออก</button>
+  </div>
   <div class="tabs">
-    <button type="button" class="tab active" data-view="report">แจ้งงาน</button>
+    <button type="button" class="tab" data-view="report" data-need="report">แจ้งงาน</button>
     <button type="button" class="tab" data-view="dashboard">Dashboard</button>
-    <button type="button" class="tab" data-view="import">นำเข้า Excel</button>
+    <button type="button" class="tab" data-view="import" data-need="report">นำเข้า Excel</button>
+    <button type="button" class="tab" data-view="users" data-need="admin">ผู้ใช้</button>
   </div>
 </header>
 
 <main>
   <!-- ====================== แจ้งงาน ====================== -->
-  <section id="view-report" class="view active">
+  <section id="view-report" class="view">
 
     <div class="card" id="headerCard">
       <h2><span class="n">1</span>ข้อมูลงาน</h2>
 
-      <div class="field">
-        <label>ผู้แจ้ง <span class="req">*</span></label>
-        <select id="reporter"><option value="">— เลือกผู้แจ้ง —</option></select>
-      </div>
-
-      <div class="field">
-        <label>สถานะของงาน <span class="req">*</span></label>
-        <select id="taskStatus"><option value="">— เลือกสถานะ —</option></select>
+      <div class="two-col">
+        <div class="field">
+          <label>ผู้แจ้ง</label>
+          <input id="reporterName" type="text" readonly>
+        </div>
+        <div class="field">
+          <label>สถานะของงาน <span class="req">*</span></label>
+          <select id="taskStatus"><option value="">— เลือกสถานะ —</option></select>
+        </div>
       </div>
 
       <div class="field">
@@ -290,43 +376,33 @@
         <button type="button" id="newTask" class="btn btn-ghost btn-block">เปลี่ยนงาน FG ใหม่</button>
       </div>
     </div>
-
   </section>
 
   <!-- ====================== Dashboard ====================== -->
   <section id="view-dashboard" class="view">
+    <div class="stats" id="dashStats"></div>
     <div class="toolbar">
-      <input id="dashSearch" type="search" placeholder="ค้นหา FG code / ชื่องาน / PD">
+      <input id="dashSearch" type="search" placeholder="ค้นหา รหัสงาน FG / เลข PD / ชื่องาน / รหัสวัตถุดิบ / ชื่อ / หมายเหตุ">
       <select id="dashReporter"><option value="">ผู้แจ้งทั้งหมด</option></select>
       <select id="dashStatus"><option value="">สถานะทั้งหมด</option></select>
+      <div class="seg" id="dashMode">
+        <button type="button" data-mode="table" class="on">ตาราง</button>
+        <button type="button" data-mode="task">ตามงาน</button>
+      </div>
+      <button type="button" id="dashRefresh" class="btn btn-ghost btn-small">โหลดใหม่</button>
+    </div>
+    <div class="bulkbar" id="bulkBar" hidden>
+      <span class="grow" id="bulkText"></span>
+      <button type="button" id="bulkEdit" class="btn btn-primary btn-small">แก้ สถานะ / เอ็นจิเนียร์</button>
+      <button type="button" id="bulkDelete" class="btn btn-danger btn-small" data-need="admin">ลบ</button>
+      <button type="button" id="bulkClear" class="btn btn-ghost btn-small">ยกเลิกที่เลือก</button>
     </div>
     <div id="dashList"><div class="msg">กำลังโหลดข้อมูล…</div></div>
   </section>
 
   <!-- ====================== นำเข้า Excel ====================== -->
   <section id="view-import" class="view">
-    <div class="card" id="impLoginCard">
-      <h2>เข้าสู่ระบบเพื่อนำเข้าข้อมูล</h2>
-      <form id="impLoginForm">
-        <div class="field">
-          <label>อีเมล</label>
-          <input id="impEmail" type="email" autocomplete="username" required>
-        </div>
-        <div class="field">
-          <label>รหัสผ่าน</label>
-          <input id="impPassword" type="password" autocomplete="current-password" required>
-        </div>
-        <div id="impLoginMsg" class="msg err" hidden></div>
-        <button type="submit" id="impLoginBtn" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
-      </form>
-    </div>
-
-    <div class="imp-user" id="impUserBar" hidden>
-      <span id="impUserText"></span>
-      <button type="button" id="impLogout" class="btn btn-ghost btn-small">ออกจากระบบ</button>
-    </div>
-
-    <div class="card" id="impFileCard" hidden>
+    <div class="card" id="impFileCard">
       <h2><span class="n">1</span>เลือกไฟล์ Excel</h2>
       <div class="field">
         <label>ไฟล์ข้อมูล (.xlsx)</label>
@@ -343,15 +419,15 @@
       <h2><span class="n">2</span>ตั้งค่าก่อนนำเข้า</h2>
       <div class="two-col">
         <div class="field">
-          <label>ผู้แจ้ง <span class="req">*</span></label>
-          <select id="impReporter"><option value="">— เลือกผู้แจ้ง —</option></select>
+          <label>ผู้แจ้ง</label>
+          <input id="impReporterName" type="text" readonly>
         </div>
         <div class="field">
           <label>หมายเหตุ (ใช้กับทุกแถว)</label>
           <input id="impNote" type="text" placeholder="ไม่บังคับ">
         </div>
       </div>
-      <div class="imp-warn">ชนิดการแก้ไข และ วันที่นำไปใช้ จะปล่อยว่างไว้ (ไม่มีข้อมูลนี้ในไฟล์ต้นทาง) กรอกเพิ่มทีหลังในชีตได้<br>สถานะของงานของทุกแถวที่นำเข้า จะตั้งเป็น "แจ้งแก้ไข" ให้อัตโนมัติ</div>
+      <div class="imp-warn">ชนิดการแก้ไข และ วันที่นำไปใช้ จะปล่อยว่างไว้ (ไม่มีข้อมูลนี้ในไฟล์ต้นทาง)<br>สถานะของงานของทุกแถวที่นำเข้า จะตั้งเป็น "แจ้งแก้ไข" ให้อัตโนมัติ</div>
     </div>
 
     <div class="card" id="impPreviewCard" hidden>
@@ -375,7 +451,78 @@
       <button type="button" id="impSubmit" class="btn btn-success btn-block" style="margin-top:12px;" disabled>นำเข้าข้อมูล</button>
     </div>
   </section>
+
+  <!-- ====================== ตั้งค่าผู้ใช้ (admin) ====================== -->
+  <section id="view-users" class="view">
+    <div class="card">
+      <h2>เพิ่มผู้ใช้ใหม่</h2>
+      <form id="newUserForm">
+        <div class="two-col">
+          <div class="field">
+            <label>ชื่อผู้ใช้ (ใช้ตอนเข้าสู่ระบบ) <span class="req">*</span></label>
+            <input id="nuLogin" type="text" autocapitalize="off" placeholder="เช่น pu หรืออีเมล" required>
+            <div class="hint">พิมพ์สั้นๆ ภาษาอังกฤษ เช่น pu (ระบบเก็บเป็น pu@bomc.local)</div>
+          </div>
+          <div class="field">
+            <label>รหัสผ่าน (อย่างน้อย 6 ตัว) <span class="req">*</span></label>
+            <input id="nuPass" type="text" autocomplete="off" required minlength="6">
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="field">
+            <label>ชื่อที่แสดง (ใช้เป็นผู้แจ้ง / เอ็นจิเนียร์) <span class="req">*</span></label>
+            <input id="nuName" type="text" required>
+          </div>
+          <div class="field">
+            <label>สิทธิ์ <span class="req">*</span></label>
+            <select id="nuRole" required></select>
+          </div>
+        </div>
+        <div id="nuMsg" class="msg" hidden></div>
+        <button type="submit" id="nuBtn" class="btn btn-primary">เพิ่มผู้ใช้</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>ผู้ใช้ทั้งหมด</h2>
+      <div class="role-legend">
+        <b>Viewer</b> ดูได้อย่างเดียว ·
+        <b>Edit1</b> แจ้งงาน + นำเข้า Excel ·
+        <b>Edit2</b> Edit1 + แก้สถานะของงาน / เอ็นจิเนียร์ ·
+        <b>Admin</b> ทำได้ทุกอย่าง + ตั้งค่าผู้ใช้
+      </div>
+      <div id="usersMsg" class="msg" hidden></div>
+      <div class="imp-table-wrap">
+        <table class="imp-table">
+          <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th>ใช้งาน</th><th>เข้าใช้ล่าสุด</th><th></th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="6">กำลังโหลด…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>
+</div>
+
+<!-- ====================== แก้ สถานะ / เอ็นจิเนียร์ ====================== -->
+<div class="modal" id="editModal" hidden>
+  <div class="card">
+    <h2 id="editTitle">แก้ สถานะ / เอ็นจิเนียร์</h2>
+    <div class="field">
+      <label>สถานะของงาน</label>
+      <select id="editStatus"></select>
+    </div>
+    <div class="field">
+      <label>เอ็นจิเนียร์ผู้รับผิดชอบ</label>
+      <select id="editEngineer"></select>
+    </div>
+    <div class="hint" style="font-size:12px;color:var(--muted);">วันที่แก้ไข จะบันทึกเป็นเวลาที่กดบันทึกให้อัตโนมัติ</div>
+    <div id="editMsg" class="msg err" hidden></div>
+    <div class="actions">
+      <button type="button" id="editCancel" class="btn btn-ghost">ยกเลิก</button>
+      <button type="button" id="editSave" class="btn btn-primary">บันทึก</button>
+    </div>
+  </div>
+</div>
 
 <!-- ====================== Scanner modal ====================== -->
 <div id="scanModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;">
@@ -392,32 +539,39 @@
   const SUPABASE_URL = "https://vmpcfiefryvfovqjhewy.supabase.co";
   const SUPABASE_KEY = "sb_publishable_ZizU3_OdW6cOrouQXo7JsA_cYCySG9H";
   const PHOTO_BUCKET = "bomc-photos";
+  const LOGIN_DOMAIN = "bomc.local"; // พิมพ์ชื่อผู้ใช้สั้นๆ ระบบเติม @bomc.local ให้ (ต้องตรงกับตอนสร้างผู้ใช้)
 
-  // ตัวเลือกในฟอร์ม (เดิมอยู่ใน Code.gs) — แก้รายชื่อได้ที่นี่
-  const REPORTERS = ["ปู", "ต้น", "ไมค์", "พีช", "เด่น", "เต้ย", "PN"];
   const EDIT_TYPES = ["เพิ่ม", "ทดแทน (ชั่วคราว)", "ทดแทน (ถาวร)", "เอาออก"];
   const STATUSES = ["อยู่ระหว่างดำเนินการ", "แจ้งแก้ไข", "แก้ไขแล้ว"];
+  const ROLES = { viewer: "Viewer", edit1: "Edit1", edit2: "Edit2", admin: "Admin" };
+  const CAN_REPORT = ["edit1", "edit2", "admin"];
+  const CAN_EDIT = ["edit2", "admin"];
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  // วันที่วันนี้ตามเวลาเครื่อง (toISOString เป็นเวลา UTC ก่อน 7 โมงเช้าจะได้วันของเมื่อวาน)
   const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const pad2 = (n) => String(n).padStart(2, "0");
   function fmtDateTime(iso) {
     if (!iso) return "";
     const d = new Date(iso);
     if (isNaN(d)) return String(iso);
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   }
   function fmtDate(ymd) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || "");
     return m ? `${+m[3]}/${+m[2]}/${m[1]}` : (ymd || "");
   }
+  const loginName = (email) => String(email || "").replace("@" + LOGIN_DOMAIN, "");
+  function showLoading(on, text) {
+    $("loadingOverlay").classList.toggle("hide", !on);
+    if (text) $("loadingText").textContent = text;
+  }
 
-  // ---------- เข้าสู่ระบบ (ใช้ร่วมกับหน้า BOM Packing: login หน้าใดหน้าหนึ่ง อีกหน้าก็ใช้ได้เลย) ----------
+  // ---------- เข้าสู่ระบบ (จำไว้ในเครื่อง: เก็บ refresh token แล้วต่ออายุเองทุกครั้งที่เปิดแอป) ----------
   const TOKEN_KEY = "bom_token";
   const REFRESH_KEY = "bom_refresh";
+  const LAST_USER_KEY = "bomc_last_user";
   const store = {
     get: (k) => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
     set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -425,6 +579,9 @@
   };
   let token = store.get(TOKEN_KEY);
   let refreshToken = store.get(REFRESH_KEY);
+  let tokenExp = 0;
+  let refreshTimer = null;
+  let me = { name: "", role: null, email: "" };
 
   async function authCall(path, body) {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
@@ -433,62 +590,73 @@
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
+    return { ok: res.ok, status: res.status, data };
   }
   function saveSession(d) {
     token = d.access_token; refreshToken = d.refresh_token;
+    tokenExp = Date.now() + (d.expires_in || 3600) * 1000;
     store.set(TOKEN_KEY, token); store.set(REFRESH_KEY, refreshToken);
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refreshSession, Math.max((d.expires_in || 3600) - 120, 30) * 1000);
   }
   function clearSession() {
-    token = ""; refreshToken = "";
+    token = ""; refreshToken = ""; tokenExp = 0;
+    clearTimeout(refreshTimer);
     store.del(TOKEN_KEY); store.del(REFRESH_KEY);
   }
-  async function refreshSession() {
-    if (!refreshToken) return false;
-    const { ok, data } = await authCall("token?grant_type=refresh_token", { refresh_token: refreshToken });
-    if (ok) { saveSession(data); return true; }
-    clearSession();
-    return false;
+  let refreshing = null;
+  function refreshSession() {
+    if (refreshing) return refreshing;
+    refreshing = (async () => {
+      if (!refreshToken) return false;
+      try {
+        const r = await authCall("token?grant_type=refresh_token", { refresh_token: refreshToken });
+        if (r.ok) { saveSession(r.data); return true; }
+        if (r.status >= 400 && r.status < 500) clearSession(); // refresh token ใช้ไม่ได้แล้ว ต้อง login ใหม่
+        return false;
+      } catch (e) {
+        return false; // เน็ตหลุด: ยังไม่ลบ session
+      } finally {
+        setTimeout(() => { refreshing = null; }, 0);
+      }
+    })();
+    return refreshing;
   }
-  function tokenEmail() {
-    try {
-      const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-      const json = decodeURIComponent(atob(b64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join(""));
-      return JSON.parse(json).email || "";
-    } catch (e) { return ""; }
-  }
+  // กลับมาเปิดแอปหลังพักไว้นาน: ต่ออายุก่อนใช้งาน
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && refreshToken && Date.now() > tokenExp - 120000) refreshSession();
+  });
 
-  // เรียก Supabase (REST / RPC / Storage)  auth = true ใช้สิทธิ์ผู้ที่ login แล้ว
-  async function sb(path, { method = "GET", body, auth = false, headers = {} } = {}) {
+  // เรียก Supabase (REST / RPC / Storage) ด้วยสิทธิ์ผู้ใช้ที่ login
+  async function sb(path, { method = "GET", body, headers = {} } = {}) {
     const isBlob = body instanceof Blob;
     const go = () => fetch(SUPABASE_URL + path, {
       method,
       cache: "no-store",
       headers: {
         apikey: SUPABASE_KEY,
-        ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(body !== undefined && !isBlob ? { "Content-Type": "application/json" } : {}),
         ...headers,
       },
       body: body === undefined ? undefined : (isBlob ? body : JSON.stringify(body)),
     });
+    if (token && tokenExp && Date.now() > tokenExp - 60000) await refreshSession();
     let res = await go();
-    if (res.status === 401 && auth && await refreshSession()) res = await go();
+    if (res.status === 401 && await refreshSession()) res = await go();
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
     if (!res.ok) {
-      if (res.status === 401 && auth) { clearSession(); renderImpAuth(); }
+      if (res.status === 401) { clearSession(); showLogin("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่"); }
       const m = (data && typeof data === "object" && (data.message || data.error_description || data.msg || data.error))
         || String(text || "").replace(/\s+/g, " ").slice(0, 200);
-      throw new Error(`HTTP ${res.status}: ${m}`);
+      throw new Error(m || `HTTP ${res.status}`);
     }
     return data;
   }
-  const rpc = (name, args, auth = false) =>
-    sb(`/rest/v1/rpc/${name}`, { method: "POST", body: args || {}, auth });
+  const rpc = (name, args) => sb(`/rest/v1/rpc/${name}`, { method: "POST", body: args || {} });
 
-  // โหลดทุกแถวแบบแบ่งหน้า (Supabase ส่งได้สูงสุด 1000 แถวต่อครั้ง)
   async function fetchAllRows(path) {
     const PAGE = 1000;
     let out = [];
@@ -500,61 +668,162 @@
     return out;
   }
 
-  // ---------- Tabs ----------
-  document.querySelectorAll(".tab").forEach((t) => {
-    t.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
-      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-      $("view-" + t.dataset.view).classList.add("active");
-      if (t.dataset.view === "dashboard" && !dashLoaded) loadDashboard();
-    });
+  function showLogin(message) {
+    $("appShell").hidden = true;
+    $("noAccessScreen").hidden = true;
+    $("loginScreen").hidden = false;
+    $("loginUser").value = store.get(LAST_USER_KEY);
+    $("loginMsg").textContent = message || "";
+    $("loginMsg").hidden = !message;
+    showLoading(false);
+  }
+
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("loginBtn"), m = $("loginMsg");
+    btn.disabled = true; btn.textContent = "กำลังตรวจสอบ…"; m.hidden = true;
+    try {
+      let user = $("loginUser").value.trim().toLowerCase();
+      store.set(LAST_USER_KEY, user);
+      if (user.indexOf("@") < 0) user += "@" + LOGIN_DOMAIN;
+      const r = await authCall("token?grant_type=password", { email: user, password: $("loginPass").value });
+      if (!r.ok) throw new Error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+      saveSession(r.data);
+      $("loginPass").value = "";
+      await startApp();
+    } catch (err) {
+      m.textContent = "เข้าสู่ระบบไม่ได้: " + err.message; m.hidden = false;
+    }
+    btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
   });
 
-  // ---------- โหลดข้อมูลค้นหาทั้งหมดครั้งเดียวตอนเปิดหน้า ----------
-  // เดิมแต่ละครั้งที่พิมพ์จะยิงไปเซิร์ฟเวอร์ค้นหาใหม่ ("กำลังค้นหา…" ค้าง) ตอนนี้โหลดทั้งตาราง
-  // PD number / Released products มาเก็บเป็น Map ในเบราว์เซอร์ตั้งแต่เปิดหน้า แล้วค้นหาในเครื่องทันที
+  document.querySelectorAll("[data-logout]").forEach((b) => b.addEventListener("click", logout));
+  function logout() {
+    const old = token;
+    clearSession();
+    store.del(INIT_CACHE_KEY);
+    if (old) fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${old}` },
+    }).catch(() => {});
+    location.reload();
+  }
+
+  // ---------- ติดตั้งแอป ----------
+  let installEvt = null;
+  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installEvt = e;
+    $("installBtn").hidden = isStandalone();
+  });
+  $("installBtn").addEventListener("click", async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    await installEvt.userChoice.catch(() => {});
+    installEvt = null;
+    $("installBtn").hidden = true;
+  });
+  window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
+  if (!isStandalone() && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
+    $("installHint").textContent = "iPhone/iPad: ติดตั้งเป็นแอปได้ที่ปุ่ม แชร์ → เพิ่มไปยังหน้าจอโฮม";
+  }
+
+  // ---------- เริ่มแอปหลัง login ----------
+  const can = {
+    report: () => CAN_REPORT.includes(me.role),
+    edit: () => CAN_EDIT.includes(me.role),
+    admin: () => me.role === "admin",
+  };
+
+  async function startApp() {
+    showLoading(true, "กำลังโหลด…");
+    try {
+      me = await rpc("bomc_me");
+    } catch (err) {
+      if (!token) return; // ถูกพาไปหน้า login แล้ว
+      showLoading(false);
+      $("loginScreen").hidden = true;
+      $("appShell").hidden = true;
+      $("noAccessScreen").hidden = false;
+      $("noAccessText").textContent = "เชื่อมต่อระบบไม่ได้: " + err.message + " — ลองเปิดแอปใหม่อีกครั้ง";
+      return;
+    }
+    if (!me || !me.role) {
+      showLoading(false);
+      $("loginScreen").hidden = true;
+      $("appShell").hidden = true;
+      $("noAccessScreen").hidden = false;
+      $("noAccessText").textContent = `บัญชี ${loginName(me && me.email)} ยังไม่ได้รับสิทธิ์ใช้งานระบบแจ้งแก้ไข BOM`;
+      return;
+    }
+    $("loginScreen").hidden = true;
+    $("noAccessScreen").hidden = true;
+    $("appShell").hidden = false;
+    $("meName").textContent = me.name || loginName(me.email);
+    $("meRole").textContent = ROLES[me.role] || me.role;
+    $("reporterName").value = me.name || loginName(me.email);
+    $("impReporterName").value = me.name || loginName(me.email);
+
+    document.querySelectorAll("[data-need]").forEach((el) => {
+      el.hidden = !can[el.dataset.need]();
+    });
+    fillAllOptions();
+    switchView(can.report() ? "report" : "dashboard");
+    await loadInit();
+  }
+
+  // ---------- Tabs ----------
+  function switchView(view) {
+    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x.dataset.view === view));
+    document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + view));
+    document.body.classList.toggle("wide", view === "dashboard" || view === "users");
+    if (view === "dashboard" && !dashLoaded) loadDashboard();
+    if (view === "users") loadUsers();
+  }
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchView(t.dataset.view)));
+
+  // ---------- ข้อมูลค้นหา PD number / Released products (เก็บไว้ในเครื่อง 1 ชม.) ----------
   let pdMap = new Map();     // QR รหัสงาน FG (ตัวพิมพ์ใหญ่) -> {pdNumber, fgModel}
   let rmMap = new Map();     // QR code วัตถุดิบ (ตัวพิมพ์ใหญ่) -> {productName, unit}
   let rmByItem = new Map();  // Item number (ตัวพิมพ์ใหญ่) -> {productName, unit}  ใช้ตอนนำเข้า Excel
   let initReady = false;
-
-  // ---------- แคชข้อมูลค้นหาไว้ในเครื่อง 1 ชม. ----------
-  // เปิดเว็บซ้ำภายใน 1 ชม. จะใช้ข้อมูลเดิมที่เคยโหลดไว้ทันที ไม่ต้องรอโหลดจากเซิร์ฟเวอร์ใหม่
-  const INIT_CACHE_KEY = "bomcLookupCache_v1";
-  const INIT_CACHE_TTL = 60 * 60 * 1000; // 1 ชั่วโมง
+  const INIT_CACHE_KEY = "bomcLookupCache_v2";
+  const INIT_CACHE_TTL = 60 * 60 * 1000;
 
   function readInitCache() {
     try {
-      const raw = localStorage.getItem(INIT_CACHE_KEY);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
+      const obj = JSON.parse(localStorage.getItem(INIT_CACHE_KEY) || "null");
       if (!obj || !obj.ts || Date.now() - obj.ts > INIT_CACHE_TTL) return null;
       return obj.data;
     } catch (e) { return null; }
   }
-
   function writeInitCache(d) {
     try {
-      localStorage.removeItem("bomInitCache_v1"); // แคชของเวอร์ชัน Google Sheet เดิม
+      localStorage.removeItem("bomInitCache_v1");
+      localStorage.removeItem("bomcLookupCache_v1");
       localStorage.setItem(INIT_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d }));
-    } catch (e) { /* โควต้าเต็มหรือเบราว์เซอร์บล็อก ไม่กระทบการใช้งาน แค่ไม่แคช */ }
+    } catch (e) { /* เต็มหรือถูกบล็อก ไม่เป็นไร */ }
   }
 
+  function fillOptions(sel, list, placeholder) {
+    const keep = sel.value;
+    sel.innerHTML = (placeholder !== null ? `<option value="">${esc(placeholder)}</option>` : "") +
+      list.map((v) => {
+        const [val, label] = Array.isArray(v) ? v : [v, v];
+        return `<option value="${esc(val)}">${esc(label)}</option>`;
+      }).join("");
+    if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  }
   function fillAllOptions() {
-    fillOptions($("reporter"), REPORTERS, "— เลือกผู้แจ้ง —");
     fillOptions($("editType"), EDIT_TYPES, "— เลือกชนิดการแก้ไข —");
     fillOptions($("taskStatus"), STATUSES, "— เลือกสถานะ —");
-    fillOptions($("dashReporter"), REPORTERS, "ผู้แจ้งทั้งหมด");
     fillOptions($("dashStatus"), STATUSES, "สถานะทั้งหมด");
-    fillOptions($("impReporter"), REPORTERS, "— เลือกผู้แจ้ง —");
-    if (REPORTERS.includes("PN")) $("impReporter").value = "PN"; // ค่าเริ่มต้นสำหรับนำเข้า Excel
+    fillOptions($("nuRole"), Object.entries(ROLES), null);
+    $("nuRole").value = "edit1";
   }
 
-  // d = { pd: [[QR, PD number, FG Model], ...], rm: [[QR code, Product name, BOM unit, Item number], ...] }
   function applyInitData(d) {
-    pdMap.clear();
-    rmMap.clear();
-    rmByItem.clear();
+    pdMap.clear(); rmMap.clear(); rmByItem.clear();
     (d.pd || []).forEach(([qr, pdNumber, fgModel]) => {
       if (qr) pdMap.set(String(qr).toUpperCase(), { pdNumber, fgModel });
     });
@@ -566,52 +835,39 @@
     initReady = true;
   }
 
-  function hideLoadingOverlay() {
-    $("loadingOverlay").classList.add("hide");
-  }
-
   async function loadInit() {
-    // มีข้อมูลเก่าที่ยังไม่เกิน 1 ชม. -> ใช้เลย ปิด popup โหลดทันที
     const cached = readInitCache();
     if (cached) {
       applyInitData(cached);
-      hideLoadingOverlay();
-      if ($("fgCode").value.trim()) resolveFG($("fgCode").value.trim());
-      if ($("rmCode").value.trim()) resolveRM($("rmCode").value.trim());
+      showLoading(false);
+      afterInit();
       return;
     }
+    if (!can.report()) { showLoading(false); return; } // viewer ไม่ต้องใช้ข้อมูลค้นหา
+    showLoading(true, "กำลังโหลดข้อมูลสำหรับค้นหา…");
     try {
       const d = await rpc("bomc_lookup");
       applyInitData(d);
       writeInitCache(d);
-
-      // ถ้าผู้ใช้สแกน/พิมพ์ไว้ก่อนโหลดเสร็จ ให้ค้นหาซ้ำทันทีที่พร้อม
-      if ($("fgCode").value.trim()) resolveFG($("fgCode").value.trim());
-      if ($("rmCode").value.trim()) resolveRM($("rmCode").value.trim());
+      afterInit();
     } catch (err) {
       setStatus($("fgStatus"), "err", "โหลดข้อมูลค้นหาไม่ได้: " + err.message + " — ยังคีย์เองได้ตามปกติ");
     } finally {
-      hideLoadingOverlay();
+      showLoading(false);
     }
   }
-  function fillOptions(sel, list, placeholder) {
-    const keep = sel.value;
-    sel.innerHTML = `<option value="">${esc(placeholder)}</option>` +
-      list.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
-    sel.value = keep;
+  function afterInit() {
+    if ($("fgCode").value.trim()) resolveFG($("fgCode").value.trim());
+    if ($("rmCode").value.trim()) resolveRM($("rmCode").value.trim());
+    if (impRows.length) parseImpSheet();
   }
 
-  // ---------- ส่วนที่ 1: ข้อมูลงาน (Header) ----------
-  // สแกน/พิมพ์รหัสงาน FG ได้ -> auto เติม เลข PD + ชื่องาน FG (ค้นหาในเครื่อง ไม่ยิงเซิร์ฟเวอร์ จึงเร็ว)
-  // สแกนไม่ได้ -> คีย์ เลข PD หรือ ชื่องาน FG เองตรงๆ โดยปล่อยรหัสงาน FG ว่างไว้ ไม่ต้อง lookup
+  // ---------- แจ้งงาน: ส่วนที่ 1 ข้อมูลงาน ----------
   function setStatus(el, cls, text) {
     el.className = "status-line show" + (cls ? " " + cls : "");
     el.textContent = text;
   }
-  function clearStatus(el) {
-    el.className = "status-line";
-    el.textContent = "";
-  }
+  function clearStatus(el) { el.className = "status-line"; el.textContent = ""; }
 
   function updateItemCardVisibility() {
     const ready = $("fgCode").value.trim() || $("pdNumber").value.trim() || $("fgModel").value.trim();
@@ -641,10 +897,7 @@
   $("fgModel").addEventListener("input", updateItemCardVisibility);
 
   $("newTask").addEventListener("click", () => {
-    $("fgCode").value = "";
-    $("pdNumber").value = "";
-    $("fgModel").value = "";
-    $("taskStatus").value = "";
+    ["fgCode", "pdNumber", "fgModel", "taskStatus"].forEach((id) => { $(id).value = ""; });
     clearStatus($("fgStatus"));
     sessionItems = [];
     renderSession();
@@ -652,9 +905,7 @@
     updateItemCardVisibility();
   });
 
-  // ---------- ส่วนที่ 2: รายการวัตถุดิบ (Item) ----------
-  // สแกน/พิมพ์รหัสที่เอาไปใช้ได้ -> auto เติม ชื่อวัตถุดิบ (ค้นหาในเครื่อง เร็วเหมือนกัน)
-  // สแกนไม่ได้ -> คีย์ ชื่อวัตถุดิบ เองตรงๆ โดยปล่อยรหัสที่เอาไปใช้ว่างไว้
+  // ---------- แจ้งงาน: ส่วนที่ 2 รายการวัตถุดิบ ----------
   $("rmCode").addEventListener("input", () => {
     const code = $("rmCode").value.trim();
     if (!code) { clearStatus($("rmStatus")); return; }
@@ -679,7 +930,7 @@
     const i = $("qty"); i.value = (parseInt(i.value, 10) || 0) + 1;
   });
 
-  // รูปถ่าย: ย่อขนาดก่อนแปลงเป็น base64 เพื่อให้อัปโหลดเร็วและไม่กินโควต้า
+  // รูปถ่าย: ย่อขนาดก่อนอัปโหลด
   let photoData = null; // {base64, mime}
   $("photo").addEventListener("change", async () => {
     const file = $("photo").files[0];
@@ -722,9 +973,6 @@
     });
   }
 
-  $("useDate").value = todayStr();
-
-  // อัปโหลดรูปขึ้น Supabase Storage แล้วคืนลิงก์สำหรับเปิดดูรูป
   async function uploadPhoto(p, folderKey, rmKey) {
     const safe = (v) => String(v || "").replace(/[^A-Za-z0-9\-]/g, "_").slice(0, 60) || "x";
     const d = new Date();
@@ -742,6 +990,8 @@
     return `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${enc}`;
   }
 
+  $("useDate").value = todayStr();
+
   function resetItemForm() {
     $("itemForm").reset();
     $("useDate").value = todayStr();
@@ -757,17 +1007,11 @@
 
   $("itemForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-
-    const reporter = $("reporter").value;
-    if (!reporter) { $("reporter").focus(); return; }
-
     const status = $("taskStatus").value;
     if (!status) { $("taskStatus").focus(); return; }
-
     const rmCode = $("rmCode").value.trim();
     const rmName = $("rmName").value.trim();
     if (!rmCode && !rmName) { $("rmName").focus(); return; }
-
     const fgCode = $("fgCode").value.trim();
     const pdNumber = $("pdNumber").value.trim();
     const fgModel = $("fgModel").value.trim();
@@ -775,7 +1019,7 @@
     if (!(qty > 0)) { $("qty").focus(); return; }
 
     const row = {
-      reporter, status,
+      reporter: me.name || "-", status, source: "web",
       fg_code: fgCode || null, pd_number: pdNumber || null, fg_model: fgModel || null,
       rm_code: rmCode || null, rm_name: rmName || null, qty,
       edit_type: $("editType").value || null,
@@ -791,11 +1035,8 @@
     try {
       if (photoData) row.photo_url = await uploadPhoto(photoData, fgCode || pdNumber || fgModel || "misc", rmCode || rmName);
       await sb("/rest/v1/bomc_items", { method: "POST", body: row, headers: { Prefer: "return=minimal" } });
-      dashLoaded = false; // ให้ Dashboard โหลดข้อมูลใหม่รอบหน้าที่เปิดแท็บ
-      sessionItems.unshift({
-        rm: rmCode, name: rmName || rmCode,
-        qty: row.qty, editType: row.edit_type || "",
-      });
+      dashLoaded = false;
+      sessionItems.unshift({ rm: rmCode, name: rmName || rmCode, qty: row.qty, editType: row.edit_type || "" });
       renderSession();
       resetItemForm();
       msg.className = "msg ok"; msg.textContent = "บันทึกรายการแล้ว"; msg.hidden = false;
@@ -821,76 +1062,217 @@
   function editBadge(type) {
     if (!type) return "";
     const map = { "เพิ่ม": "add", "ทดแทน (ชั่วคราว)": "temp", "ทดแทน (ถาวร)": "perm", "เอาออก": "remove" };
-    const cls = map[type] || "temp";
-    return `<span class="badge ${cls}">${esc(type)}</span>`;
+    return `<span class="badge ${map[type] || "temp"}">${esc(type)}</span>`;
   }
-
   function statusBadge(status) {
-    if (!status) return "";
+    if (!status) return `<span class="badge gray">ไม่ระบุ</span>`;
     const map = { "อยู่ระหว่างดำเนินการ": "temp", "แจ้งแก้ไข": "perm", "แก้ไขแล้ว": "add" };
-    const cls = map[status] || "temp";
-    return `<span class="badge ${cls}">${esc(status)}</span>`;
+    return `<span class="badge ${map[status] || "temp"}">${esc(status)}</span>`;
   }
 
   // ---------- Dashboard ----------
   let dashLoaded = false;
   let dashItems = [];
-  let dashTaskList = []; // รายการงานล่าสุดที่ render ไว้ (ให้ปุ่ม "เพิ่มรายการ" อ้างอิงกลับมาใช้)
+  let dashTaskList = [];
+  let dashMode = "table";
+  let dashLimit = 200;
+  const selected = new Set();
+  let engineers = []; // ชื่อผู้ใช้ Edit2 / Admin
 
   async function loadDashboard() {
     $("dashList").innerHTML = `<div class="msg">กำลังโหลดข้อมูล…</div>`;
     try {
-      const rows = await fetchAllRows("/rest/v1/bomc_items?select=id,no,created_at,reporter,rm_code,rm_name,qty,edit_type,old_code,fg_code,pd_number,fg_model,use_date,photo_url,note,status,engineer,fix_date&order=created_at.asc,id.asc");
+      const [rows, profs] = await Promise.all([
+        fetchAllRows("/rest/v1/bomc_items?select=id,no,created_at,reporter,rm_code,rm_name,qty,edit_type,old_code,fg_code,pd_number,fg_model,use_date,photo_url,note,status,engineer,fix_date&order=created_at.desc,id.desc"),
+        can.edit() ? sb("/rest/v1/bomc_profiles?select=name,role&active=is.true&role=in.(edit2,admin)&order=name") : Promise.resolve([]),
+      ]);
+      engineers = [...new Set((profs || []).map((p) => (p.name || "").trim()).filter(Boolean))];
       dashItems = rows.map((r) => ({
-        date: r.created_at, no: r.no, reporter: r.reporter || "",
+        id: r.id, date: r.created_at, no: r.no ?? "", reporter: r.reporter || "",
         rmCode: r.rm_code || "", rmName: r.rm_name || "", qty: r.qty ?? "",
         editType: r.edit_type || "", oldCode: r.old_code || "",
         fgCode: r.fg_code || "", pdNumber: r.pd_number || "", fgModel: r.fg_model || "",
         useDate: fmtDate(r.use_date), photo: r.photo_url || "", note: r.note || "",
         status: r.status || "", engineer: r.engineer || "", fixDate: r.fix_date || "",
       }));
+      const reporters = [...new Set(dashItems.map((it) => it.reporter).filter(Boolean))].sort();
+      fillOptions($("dashReporter"), reporters, "ผู้แจ้งทั้งหมด");
+      for (const id of [...selected]) if (!dashItems.some((it) => it.id === id)) selected.delete(id);
       dashLoaded = true;
       renderDashboard();
     } catch (err) {
       $("dashList").innerHTML = `<div class="msg err">โหลดข้อมูลไม่ได้: ${esc(err.message)}</div>
-        <div class="msg"><button type="button" class="btn btn-ghost" onclick="loadDashboard()">ลองใหม่</button></div>`;
+        <div class="msg"><button type="button" class="btn btn-ghost" id="dashRetry">ลองใหม่</button></div>`;
+      $("dashRetry").addEventListener("click", loadDashboard);
     }
   }
 
-  function renderDashboard() {
+  function filteredItems(ignoreStatus) {
     const q = $("dashSearch").value.trim().toLowerCase();
-    const reporterFilter = $("dashReporter").value;
-    const statusFilter = $("dashStatus").value;
-
-    const filtered = dashItems.filter((it) => {
-      if (reporterFilter && it.reporter !== reporterFilter) return false;
+    const rep = $("dashReporter").value;
+    const st = $("dashStatus").value;
+    return dashItems.filter((it) => {
+      if (rep && it.reporter !== rep) return false;
+      if (!ignoreStatus && st && it.status !== st) return false;
       if (!q) return true;
-      return (it.fgCode + " " + it.fgModel + " " + it.pdNumber).toLowerCase().includes(q);
+      return [it.fgCode, it.fgModel, it.pdNumber, it.rmCode, it.rmName, it.oldCode, it.note, it.reporter, it.engineer]
+        .join(" ").toLowerCase().includes(q);
     });
+  }
 
-    const tasks = new Map(); // key -> {fgCode, fgModel, pdNumber, status, items:[], last}
+  function renderStats() {
+    const base = filteredItems(true);
+    const st = $("dashStatus").value;
+    const count = (s) => base.filter((it) => it.status === s).length;
+    const chips = [["", "ทั้งหมด", base.length], ...STATUSES.map((s) => [s, s, count(s)])];
+    $("dashStats").innerHTML = chips.map(([v, k, n]) =>
+      `<button type="button" class="stat${st === v ? " on" : ""}" data-st="${esc(v)}"><div class="k">${esc(k)}</div><div class="v">${n}</div></button>`).join("");
+    $("dashStats").querySelectorAll(".stat").forEach((b) => b.addEventListener("click", () => {
+      $("dashStatus").value = b.dataset.st;
+      dashLimit = 200;
+      renderDashboard();
+    }));
+  }
+
+  function renderDashboard() {
+    renderStats();
+    renderBulkBar();
+    if (dashMode === "task") return renderTasks();
+    const list = filteredItems(false);
+    if (!list.length) { $("dashList").innerHTML = `<div class="msg">ไม่พบข้อมูล</div>`; return; }
+    const shown = list.slice(0, dashLimit);
+    const editable = can.edit();
+    const allOn = editable && shown.length > 0 && shown.every((it) => selected.has(it.id));
+    const head = [
+      editable ? `<th><input type="checkbox" id="selAll" ${allOn ? "checked" : ""} title="เลือกทั้งหมดที่แสดง"></th>` : "",
+      "<th>วันที่แจ้ง</th><th>No.</th><th>ผู้แจ้ง</th><th>รหัสที่เอาไปใช้</th><th>ชื่อวัตถุดิบ</th><th>จำนวนที่ใช้</th>",
+      "<th>ชนิดการแก้ไข</th><th>รหัสเดิม</th><th>รหัสงาน FG</th><th>เลข PD</th><th>ชื่องาน FG</th><th>วันที่นำไปใช้</th>",
+      "<th>รูปถ่าย</th><th>หมายเหตุ</th><th>สถานะของงาน</th><th>เอ็นจิเนียร์ผู้รับผิดชอบ</th><th>วันที่แก้ไข</th>",
+      editable ? "<th></th>" : "",
+    ].join("");
+    const body = shown.map((it) => `
+      <tr class="${selected.has(it.id) ? "sel" : ""}">
+        ${editable ? `<td><input type="checkbox" class="selRow" data-id="${it.id}" ${selected.has(it.id) ? "checked" : ""}></td>` : ""}
+        <td class="nw">${esc(fmtDateTime(it.date))}</td>
+        <td class="num">${esc(it.no)}</td>
+        <td class="nw">${esc(it.reporter)}</td>
+        <td class="nw">${esc(it.rmCode)}</td>
+        <td class="wrap">${esc(it.rmName)}</td>
+        <td class="num">${esc(it.qty)}</td>
+        <td>${editBadge(it.editType)}</td>
+        <td class="nw">${esc(it.oldCode)}</td>
+        <td class="nw">${esc(it.fgCode)}</td>
+        <td class="nw">${esc(it.pdNumber)}</td>
+        <td class="nw">${esc(it.fgModel)}</td>
+        <td class="nw">${esc(it.useDate)}</td>
+        <td>${it.photo ? `<a href="${esc(it.photo)}" target="_blank" rel="noopener">ดูรูป</a>` : ""}</td>
+        <td class="wrap">${esc(it.note)}</td>
+        <td>${statusBadge(it.status)}</td>
+        <td class="nw">${esc(it.engineer)}</td>
+        <td class="nw">${esc(it.fixDate)}</td>
+        ${editable ? `<td><button type="button" class="btn btn-ghost btn-small editRow" data-id="${it.id}">แก้ไข</button></td>` : ""}
+      </tr>`).join("");
+    $("dashList").innerHTML = `
+      <div class="tbl-wrap"><table class="grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+      ${list.length > shown.length ? `<div class="more"><button type="button" class="btn btn-ghost" id="dashMore">แสดงเพิ่ม (${shown.length} จาก ${list.length})</button></div>`
+        : `<div class="imp-count">แสดง ${list.length} รายการ</div>`}`;
+
+    if ($("dashMore")) $("dashMore").addEventListener("click", () => { dashLimit += 200; renderDashboard(); });
+    if (editable) {
+      $("selAll").addEventListener("change", (e) => {
+        shown.forEach((it) => (e.target.checked ? selected.add(it.id) : selected.delete(it.id)));
+        renderDashboard();
+      });
+      $("dashList").querySelectorAll(".selRow").forEach((cb) => cb.addEventListener("change", () => {
+        const id = Number(cb.dataset.id);
+        cb.checked ? selected.add(id) : selected.delete(id);
+        cb.closest("tr").classList.toggle("sel", cb.checked);
+        renderBulkBar();
+      }));
+      $("dashList").querySelectorAll(".editRow").forEach((b) => b.addEventListener("click", () => openEdit([Number(b.dataset.id)])));
+    }
+  }
+
+  function renderBulkBar() {
+    const n = selected.size;
+    $("bulkBar").hidden = !(can.edit() && n > 0 && dashMode === "table");
+    $("bulkText").textContent = `เลือกไว้ ${n} รายการ`;
+    $("bulkDelete").hidden = !can.admin();
+  }
+  $("bulkEdit").addEventListener("click", () => openEdit([...selected]));
+  $("bulkClear").addEventListener("click", () => { selected.clear(); renderDashboard(); });
+  $("bulkDelete").addEventListener("click", async () => {
+    const ids = [...selected];
+    if (!ids.length || !confirm(`ลบ ${ids.length} รายการ? ลบแล้วกู้คืนไม่ได้`)) return;
+    try {
+      await sb(`/rest/v1/bomc_items?id=in.(${ids.join(",")})`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      selected.clear();
+      await loadDashboard();
+    } catch (err) { alert("ลบไม่สำเร็จ: " + err.message); }
+  });
+
+  // ---------- แก้ สถานะ / เอ็นจิเนียร์ ----------
+  let editIds = [];
+  function openEdit(ids) {
+    editIds = ids.filter(Boolean);
+    if (!editIds.length) return;
+    const items = dashItems.filter((it) => editIds.includes(it.id));
+    const single = items.length === 1 ? items[0] : null;
+    $("editTitle").textContent = single
+      ? `แก้ไข: ${single.rmName || single.rmCode} (${single.fgCode || single.pdNumber || single.fgModel})`
+      : `แก้ไข ${items.length} รายการที่เลือก`;
+    const keepOpt = single ? [] : [["", "— ไม่เปลี่ยน —"]];
+    fillOptions($("editStatus"), [...keepOpt, ...STATUSES], null);
+    $("editStatus").value = single ? (single.status || "แจ้งแก้ไข") : "";
+
+    const myName = me.name || "";
+    const names = [...new Set([...engineers, ...(single && single.engineer ? [single.engineer] : [])])];
+    fillOptions($("editEngineer"), [...(single ? [] : [["", "— ไม่เปลี่ยน —"]]), ...names], null);
+    $("editEngineer").value = single ? (single.engineer || (names.includes(myName) ? myName : names[0] || "")) : "";
+    $("editMsg").hidden = true;
+    $("editModal").hidden = false;
+  }
+  $("editCancel").addEventListener("click", () => { $("editModal").hidden = true; });
+  $("editSave").addEventListener("click", async () => {
+    const btn = $("editSave");
+    btn.disabled = true; btn.textContent = "กำลังบันทึก…";
+    try {
+      await rpc("bomc_set_status", {
+        p_ids: editIds,
+        p_status: $("editStatus").value || null,
+        p_engineer: $("editEngineer").value || null,
+      });
+      $("editModal").hidden = true;
+      selected.clear();
+      await loadDashboard();
+    } catch (err) {
+      $("editMsg").textContent = "บันทึกไม่สำเร็จ: " + err.message; $("editMsg").hidden = false;
+    }
+    btn.disabled = false; btn.textContent = "บันทึก";
+  });
+
+  // ---------- Dashboard: มุมมองตามงาน ----------
+  function renderTasks() {
+    const filtered = filteredItems(true).slice().reverse(); // เก่า -> ใหม่ ให้สถานะล่าสุดทับ
+    const tasks = new Map();
     filtered.forEach((it) => {
       const key = it.fgCode || it.pdNumber || it.fgModel || "(ไม่ระบุงาน)";
-      if (!tasks.has(key)) tasks.set(key, { fgCode: it.fgCode, fgModel: it.fgModel, pdNumber: it.pdNumber, status: it.status, engineer: it.engineer, fixDate: it.fixDate, items: [], last: it.date });
+      if (!tasks.has(key)) tasks.set(key, { fgCode: it.fgCode, fgModel: it.fgModel, pdNumber: it.pdNumber, status: "", engineer: "", fixDate: "", items: [], last: it.date });
       const t = tasks.get(key);
       t.items.push(it);
       if (new Date(it.date) > new Date(t.last)) t.last = it.date;
       if (!t.fgCode && it.fgCode) t.fgCode = it.fgCode;
       if (!t.fgModel && it.fgModel) t.fgModel = it.fgModel;
       if (!t.pdNumber && it.pdNumber) t.pdNumber = it.pdNumber;
-      if (it.status) t.status = it.status; // ใช้ค่าสถานะล่าสุดของงานนี้ (รายการใหม่สุดเป็นหลัก)
-      // เอ็นจิเนียร์ผู้รับผิดชอบ/วันที่แก้ไข ไม่ได้กรอกจากฟอร์ม แต่กรอกตรงในชีต -> ดึงค่าล่าสุดที่มีมาแสดง
+      if (it.status) t.status = it.status;
       if (it.engineer) t.engineer = it.engineer;
       if (it.fixDate) t.fixDate = it.fixDate;
     });
-
-    // กรองตามสถานะ หลังจากรวมเป็นงานแล้ว (สถานะเป็นคุณสมบัติของงาน ไม่ใช่ของแต่ละรายการ)
-    let taskValues = Array.from(tasks.values());
-    if (statusFilter) taskValues = taskValues.filter((t) => t.status === statusFilter);
-
-    const list = taskValues.sort((a, b) => new Date(b.last) - new Date(a.last));
+    const st = $("dashStatus").value;
+    let list = Array.from(tasks.values());
+    if (st) list = list.filter((t) => t.status === st);
+    list.sort((a, b) => new Date(b.last) - new Date(a.last));
     dashTaskList = list;
-
     if (!list.length) { $("dashList").innerHTML = `<div class="msg">ไม่พบข้อมูล</div>`; return; }
 
     $("dashList").innerHTML = list.map((t, i) => `
@@ -901,20 +1283,18 @@
             <div class="model">${esc(t.fgModel)}${t.pdNumber ? " · PD " + esc(t.pdNumber) : ""}</div>
             <div class="task-meta">อัปเดตล่าสุด ${esc(fmtDateTime(t.last))}</div>
             ${(t.engineer || t.fixDate) ? `<div class="task-meta">${t.engineer ? "เอ็นจิเนียร์: " + esc(t.engineer) : ""}${t.engineer && t.fixDate ? " · " : ""}${t.fixDate ? "วันที่แก้ไข: " + esc(t.fixDate) : ""}</div>` : ""}
-            ${t.status ? `<div style="margin-top:6px;">${statusBadge(t.status)}</div>` : ""}
+            <div style="margin-top:6px;">${statusBadge(t.status)}</div>
           </div>
           <div class="task-side">
             <div class="task-count">${t.items.length} รายการ</div>
-            <button type="button" class="btn btn-ghost btn-small add-to-task" data-idx="${i}">+ เพิ่มรายการ</button>
+            ${can.report() ? `<button type="button" class="btn btn-ghost btn-small add-to-task" data-idx="${i}">+ เพิ่มรายการ</button>` : ""}
+            ${can.edit() ? `<button type="button" class="btn btn-ghost btn-small edit-task" data-idx="${i}">แก้สถานะทั้งงาน</button>` : ""}
           </div>
         </div>
         <div class="task-items" id="task-${i}">
-          ${t.items.map((it) => `
+          ${t.items.slice().reverse().map((it) => `
             <div class="item-row">
-              <div class="r1">
-                <div class="rm">${esc(it.rmName || it.rmCode)}</div>
-                ${editBadge(it.editType)}
-              </div>
+              <div class="r1"><div class="rm">${esc(it.rmName || it.rmCode)}</div>${editBadge(it.editType)}</div>
               <div class="r2">${esc(it.rmCode)} · จำนวน ${esc(it.qty)}${it.oldCode ? " · รหัสเดิม " + esc(it.oldCode) : ""}</div>
               <div class="r2">ผู้แจ้ง ${esc(it.reporter)}${it.useDate ? " · วันที่นำไปใช้ " + esc(it.useDate) : ""}${it.note ? " · " + esc(it.note) : ""}</div>
               ${it.photo ? `<a class="photo-link" href="${esc(it.photo)}" target="_blank" rel="noopener">ดูรูปถ่าย</a>` : ""}
@@ -922,22 +1302,22 @@
         </div>
       </div>`).join("");
 
-    document.querySelectorAll(".task-head").forEach((h) => {
+    $("dashList").querySelectorAll(".task-head").forEach((h) => {
       h.addEventListener("click", () => $("task-" + h.dataset.idx).classList.toggle("open"));
     });
-    document.querySelectorAll(".add-to-task").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation(); // กันไม่ให้ไปเปิด/ปิดรายการของการ์ดพร้อมกัน
-        goToTaskHeader(btn.dataset.idx);
-      });
-    });
+    $("dashList").querySelectorAll(".add-to-task").forEach((btn) => btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      goToTaskHeader(btn.dataset.idx);
+    }));
+    $("dashList").querySelectorAll(".edit-task").forEach((btn) => btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEdit(dashTaskList[btn.dataset.idx].items.map((it) => it.id));
+    }));
   }
 
-  // กด "เพิ่มรายการ" จากการ์ดงานใน Dashboard -> กลับไปแท็บแจ้งงาน พร้อมข้อมูล Header เดิม
   function goToTaskHeader(idx) {
     const t = dashTaskList[idx];
     if (!t) return;
-
     $("fgCode").value = t.fgCode || "";
     $("pdNumber").value = t.pdNumber || "";
     $("fgModel").value = t.fgModel || "";
@@ -947,27 +1327,25 @@
     renderSession();
     resetItemForm();
     updateItemCardVisibility();
-
-    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x.dataset.view === "report"));
-    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-    $("view-report").classList.add("active");
-
+    switchView("report");
     window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(() => $("rmCode").focus(), 300);
   }
 
-  $("dashSearch").addEventListener("input", renderDashboard);
-  $("dashReporter").addEventListener("change", renderDashboard);
-  $("dashStatus").addEventListener("change", renderDashboard);
+  $("dashSearch").addEventListener("input", () => { dashLimit = 200; renderDashboard(); });
+  $("dashReporter").addEventListener("change", () => { dashLimit = 200; renderDashboard(); });
+  $("dashStatus").addEventListener("change", () => { dashLimit = 200; renderDashboard(); });
+  $("dashRefresh").addEventListener("click", loadDashboard);
+  $("dashMode").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    dashMode = b.dataset.mode;
+    $("dashMode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    renderDashboard();
+  }));
 
   // ---------- นำเข้า Excel ----------
-  // อ่านไฟล์ .xlsx ในเครื่อง (ไม่ต้องอัปโหลดไปไหน) ด้วยไลบรารี SheetJS แล้วแมปคอลัมน์
-  // เป็นชื่อหัวคอลัมน์หลายแบบ เผื่อไฟล์ต้นทางเปลี่ยนชื่อ/จัดลำดับใหม่
+  // rmcode / Item Number = รหัสเดิม,  แก้ไขBOM-PD / New Item = รหัสที่เอาไปใช้ (ชื่อวัตถุดิบดึงจาก Released products)
   let impWorkbook = null;
-  let impRows = []; // แถวที่ parse แล้ว ยังไม่รวมค่าที่ตั้งร่วมกัน (ผู้แจ้ง/หมายเหตุ)
-
-  // ไฟล์ "แจ้งแก้ไข BOM by PN": rmcode / Item Number = รหัสเดิมที่อยู่ใน BOM
-  //                           แก้ไขBOM-PD / New Item = รหัสที่เอาไปใช้แทน  (ชื่อวัตถุดิบ ดึงจาก Released products ตามรหัสนี้)
+  let impRows = [];
   const IMP_COL_ALIASES = {
     pdNumber: ["pdnum", "pd number", "เลข pd"],
     fgCode: ["fgcod", "fgcode", "fg code", "รหัสงาน fg"],
@@ -976,9 +1354,8 @@
     newCode: ["แก้ไขbom-pd", "new item"],
     qty: ["rmqty", "qty"],
   };
-
-  function normHeader(h) { return String(h ?? "").trim().toLowerCase(); }
-
+  const IMP_FIXED_STATUS = "แจ้งแก้ไข";
+  const normHeader = (h) => String(h ?? "").trim().toLowerCase();
   function findImpCol(headers, aliases) {
     const normed = headers.map(normHeader);
     for (const a of aliases) {
@@ -988,8 +1365,7 @@
     return -1;
   }
 
-  let impImported = false; // กันกดนำเข้าซ้ำหลังนำเข้าไฟล์เดิมสำเร็จแล้ว
-
+  let impImported = false;
   function resetImpSubmitButton() {
     impImported = false;
     const btn = $("impSubmit");
@@ -1008,31 +1384,21 @@
     try {
       const buf = await file.arrayBuffer();
       impWorkbook = XLSX.read(buf, { type: "array", cellDates: true });
-      fillImpSheetSelect();
+      const preferred = impWorkbook.SheetNames.includes("BOM PD") ? "BOM PD" : impWorkbook.SheetNames[0];
+      $("impSheet").innerHTML = impWorkbook.SheetNames.map((n) =>
+        `<option value="${esc(n)}" ${n === preferred ? "selected" : ""}>${esc(n)}</option>`).join("");
+      parseImpSheet();
     } catch (err) {
       alert("อ่านไฟล์ Excel ไม่สำเร็จ: " + err.message);
     }
   });
-
-  function fillImpSheetSelect() {
-    const wb = impWorkbook;
-    if (!wb) return;
-    const preferred = wb.SheetNames.includes("BOM PD") ? "BOM PD" : wb.SheetNames[0];
-    $("impSheet").innerHTML = wb.SheetNames.map((n) =>
-      `<option value="${esc(n)}" ${n === preferred ? "selected" : ""}>${esc(n)}</option>`).join("");
-    parseImpSheet();
-  }
-
   $("impSheet").addEventListener("change", parseImpSheet);
 
   function parseImpSheet() {
-    const wb = impWorkbook;
-    if (!wb) return;
-    const sheetName = $("impSheet").value;
-    const ws = wb.Sheets[sheetName];
+    if (!impWorkbook) return;
+    const ws = impWorkbook.Sheets[$("impSheet").value];
     if (!ws) { impRows = []; return; }
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
-
     if (!rows.length) {
       impRows = [];
       $("impColWarn").textContent = "ชีตนี้ไม่มีข้อมูล";
@@ -1040,11 +1406,8 @@
       $("impPreviewCard").hidden = true;
       return;
     }
-
-    const headers = rows[0];
     const col = {};
-    Object.keys(IMP_COL_ALIASES).forEach((k) => { col[k] = findImpCol(headers, IMP_COL_ALIASES[k]); });
-
+    Object.keys(IMP_COL_ALIASES).forEach((k) => { col[k] = findImpCol(rows[0], IMP_COL_ALIASES[k]); });
     impRows = rows.slice(1)
       .filter((r) => r.some((v) => String(v ?? "").trim() !== ""))
       .map((r) => {
@@ -1058,91 +1421,55 @@
           oldCode: cell("itemCode"),
         };
       });
-
     const missing = Object.keys(col).filter((k) => col[k] < 0);
     $("impColWarn").textContent = missing.length
-      ? "ไม่พบคอลัมน์: " + missing.join(", ") + " ในชีตนี้ — ช่องที่เกี่ยวข้องจะว่างไว้ ต้องกรอกเพิ่มทีหลังในชีต"
-      : "";
-
+      ? "ไม่พบคอลัมน์: " + missing.join(", ") + " ในชีตนี้ — ช่องที่เกี่ยวข้องจะว่างไว้" : "";
     $("impSettingsCard").hidden = !impRows.length;
     $("impPreviewCard").hidden = !impRows.length;
     resetImpSubmitButton();
-
     renderImpPreview();
   }
 
-  const IMP_FIXED_STATUS = "แจ้งแก้ไข"; // สถานะของงานของทุกแถวที่นำเข้าจาก Excel ตั้งค่าคงที่ไว้แบบนี้เสมอ
-
   function renderImpPreview() {
-    const reporter = $("impReporter").value;
-
     $("impCount").textContent = `พบ ${impRows.length} แถวในไฟล์`;
-
-    const body = impRows.slice(0, 50).map((r, i) => `
+    $("impPreviewBody").innerHTML = impRows.slice(0, 50).map((r, i) => `
       <tr>
-        <td>${i + 1}</td>
-        <td>${esc(r.fgCode)}</td>
-        <td>${esc(r.pdNumber)}</td>
-        <td>${esc(r.fgModel)}</td>
-        <td>${esc(r.rmCode)}</td>
-        <td>${esc(r.rmName)}</td>
-        <td>${esc(r.qty)}</td>
-        <td>${esc(r.oldCode)}</td>
-        <td>${esc(IMP_FIXED_STATUS)}</td>
-      </tr>`).join("");
-    $("impPreviewBody").innerHTML = body || `<tr><td colspan="9">ไม่มีข้อมูล</td></tr>`;
+        <td>${i + 1}</td><td>${esc(r.fgCode)}</td><td>${esc(r.pdNumber)}</td><td>${esc(r.fgModel)}</td>
+        <td>${esc(r.rmCode)}</td><td>${esc(r.rmName)}</td><td>${esc(r.qty)}</td>
+        <td>${esc(r.oldCode)}</td><td>${esc(IMP_FIXED_STATUS)}</td>
+      </tr>`).join("") || `<tr><td colspan="9">ไม่มีข้อมูล</td></tr>`;
     $("impPreviewNote").textContent = impRows.length > 50
       ? `แสดงตัวอย่าง 50 จากทั้งหมด ${impRows.length} แถว (นำเข้าจะส่งครบทุกแถว)` : "";
-
-    const ready = impRows.length > 0 && reporter && !impImported;
-    $("impSubmit").disabled = !ready;
+    $("impSubmit").disabled = !(impRows.length > 0 && !impImported);
   }
 
-  ["impReporter", "impNote"].forEach((id) => {
-    $(id).addEventListener("input", renderImpPreview);
-    $(id).addEventListener("change", renderImpPreview);
-  });
-
   $("impSubmit").addEventListener("click", async () => {
-    const reporter = $("impReporter").value;
     const note = $("impNote").value.trim();
-    if (!reporter) return;
-
     const rows = impRows
       .filter((r) => (r.fgCode || r.pdNumber || r.fgModel) && (r.rmCode || r.rmName) && r.qty > 0)
       .map((r) => ({
-        reporter, status: IMP_FIXED_STATUS,
-        fgCode: r.fgCode, pdNumber: r.pdNumber, fgModel: r.fgModel,
-        rmCode: r.rmCode, productName: r.rmName, qty: r.qty,
-        oldCode: r.oldCode, note,
-      }))
-      .map((r) => ({
-        reporter: r.reporter, status: r.status, fg_code: r.fgCode, pd_number: r.pdNumber, fg_model: r.fgModel,
-        rm_code: r.rmCode, rm_name: r.productName, qty: r.qty, old_code: r.oldCode, note: r.note,
+        status: IMP_FIXED_STATUS, fg_code: r.fgCode, pd_number: r.pdNumber, fg_model: r.fgModel,
+        rm_code: r.rmCode, rm_name: r.rmName, qty: r.qty, old_code: r.oldCode, note,
       }));
     const skippedUpfront = impRows.length - rows.length;
-
     if (!rows.length) {
       $("impMsg").className = "msg err";
       $("impMsg").textContent = "ไม่มีแถวที่ข้อมูลครบพอจะนำเข้า (ต้องมีรหัสงาน/เลข PD/ชื่องาน FG อย่างน้อย 1 อย่าง, รหัสที่เอาไปใช้ (New Item), และจำนวนมากกว่า 0)";
       $("impMsg").hidden = false;
       return;
     }
-
     const btn = $("impSubmit");
     btn.disabled = true; btn.textContent = "กำลังนำเข้า…";
     $("impMsg").hidden = true;
     try {
-      if (!token) throw new Error("กรุณาเข้าสู่ระบบก่อนนำเข้าข้อมูล");
-      const d = await rpc("bomc_import", { p_rows: rows }, true);
+      const d = await rpc("bomc_import", { p_rows: rows });
       $("impMsg").className = "msg ok";
       $("impMsg").textContent = `นำเข้าสำเร็จ ${d.imported} แถว`
         + (d.duplicate ? ` (ข้าม ${d.duplicate} แถวที่ซ้ำกับข้อมูลเดิมในระบบ)` : "")
-        + (d.skipped ? ` (เซิร์ฟเวอร์ข้าม ${d.skipped} แถวที่ข้อมูลไม่ครบ)` : "")
-        + (skippedUpfront ? ` (ไม่ได้ส่ง ${skippedUpfront} แถวตั้งแต่ต้นเพราะข้อมูลไม่ครบ)` : "");
+        + (d.skipped ? ` (ข้าม ${d.skipped} แถวที่ข้อมูลไม่ครบ)` : "")
+        + (skippedUpfront ? ` (ไม่ได้ส่ง ${skippedUpfront} แถวเพราะข้อมูลไม่ครบ)` : "");
       $("impMsg").hidden = false;
-      dashLoaded = false; // ให้ Dashboard โหลดข้อมูลใหม่รอบหน้าที่เปิดแท็บ
-      // นำเข้าสำเร็จแล้ว ล็อกปุ่มไว้กันกดซ้ำ จนกว่าจะเลือกไฟล์/ชีตใหม่
+      dashLoaded = false;
       impImported = true;
       btn.disabled = true;
       btn.classList.remove("btn-success");
@@ -1155,50 +1482,88 @@
     btn.disabled = false; btn.textContent = "นำเข้าข้อมูล";
   });
 
-  // ---------- เข้าสู่ระบบสำหรับนำเข้า Excel ----------
-  function renderImpAuth() {
-    const on = !!token;
-    $("impLoginCard").hidden = on;
-    $("impUserBar").hidden = !on;
-    $("impFileCard").hidden = !on;
-    if (!on) { $("impSettingsCard").hidden = true; $("impPreviewCard").hidden = true; }
-    else if (impRows.length) { $("impSettingsCard").hidden = false; $("impPreviewCard").hidden = false; }
-    $("impUserText").textContent = on ? "เข้าสู่ระบบแล้ว: " + (tokenEmail() || "-") : "";
+  // ---------- ตั้งค่าผู้ใช้ (admin) ----------
+  async function loadUsers() {
+    if (!can.admin()) return;
+    $("usersBody").innerHTML = `<tr><td colspan="6">กำลังโหลด…</td></tr>`;
+    try {
+      const users = await rpc("bomc_admin_users");
+      const roleOpts = [["", "— ไม่มีสิทธิ์ —"], ...Object.entries(ROLES)];
+      $("usersBody").innerHTML = users.map((u) => `
+        <tr data-id="${esc(u.user_id)}">
+          <td>${esc(loginName(u.email))}${u.user_id === me.user_id ? " (คุณ)" : ""}</td>
+          <td><input type="text" class="uName" value="${esc(u.name)}" style="min-width:140px"></td>
+          <td><select class="uRole">${roleOpts.map(([v, l]) => `<option value="${v}" ${u.role === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>
+          <td style="text-align:center"><input type="checkbox" class="uActive" ${u.active || !u.role ? "checked" : ""}></td>
+          <td>${esc(fmtDateTime(u.last_sign_in_at))}</td>
+          <td style="white-space:nowrap">
+            <button type="button" class="btn btn-primary btn-small uSave">บันทึก</button>
+            <button type="button" class="btn btn-ghost btn-small uPass">ตั้งรหัสผ่าน</button>
+          </td>
+        </tr>`).join("") || `<tr><td colspan="6">ไม่มีผู้ใช้</td></tr>`;
+      $("usersBody").querySelectorAll("tr[data-id]").forEach((tr) => {
+        const id = tr.dataset.id;
+        tr.querySelector(".uSave").addEventListener("click", async (e) => {
+          const b = e.target;
+          b.disabled = true;
+          try {
+            await rpc("bomc_admin_save_user", {
+              p_user: id, p_name: tr.querySelector(".uName").value.trim(),
+              p_role: tr.querySelector(".uRole").value, p_active: tr.querySelector(".uActive").checked,
+            });
+            usersMsg("บันทึกแล้ว", true);
+            if (id === me.user_id) me.name = tr.querySelector(".uName").value.trim();
+          } catch (err) { usersMsg("บันทึกไม่สำเร็จ: " + err.message, false); }
+          b.disabled = false;
+        });
+        tr.querySelector(".uPass").addEventListener("click", async () => {
+          const pw = prompt("รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)");
+          if (!pw) return;
+          try {
+            await rpc("bomc_admin_set_password", { p_user: id, p_password: pw });
+            usersMsg("ตั้งรหัสผ่านใหม่แล้ว", true);
+          } catch (err) { usersMsg("ตั้งรหัสผ่านไม่สำเร็จ: " + err.message, false); }
+        });
+      });
+    } catch (err) {
+      $("usersBody").innerHTML = `<tr><td colspan="6" class="msg err">โหลดรายชื่อไม่ได้: ${esc(err.message)}</td></tr>`;
+    }
+  }
+  function usersMsg(text, ok) {
+    const m = $("usersMsg");
+    m.className = "msg " + (ok ? "ok" : "err");
+    m.textContent = text;
+    m.hidden = false;
+    clearTimeout(usersMsg.t);
+    usersMsg.t = setTimeout(() => { m.hidden = true; }, 4000);
   }
 
-  $("impLoginForm").addEventListener("submit", async (e) => {
+  $("newUserForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn = $("impLoginBtn"), m = $("impLoginMsg");
-    btn.disabled = true; btn.textContent = "กำลังตรวจสอบ…"; m.hidden = true;
+    const btn = $("nuBtn"), m = $("nuMsg");
+    btn.disabled = true; m.hidden = true;
     try {
-      const { ok, data } = await authCall("token?grant_type=password",
-        { email: $("impEmail").value.trim(), password: $("impPassword").value });
-      if (!ok) throw new Error("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-      saveSession(data);
-      $("impPassword").value = "";
-      renderImpAuth();
+      const r = await rpc("bomc_admin_create_user", {
+        p_login: $("nuLogin").value.trim(), p_password: $("nuPass").value,
+        p_name: $("nuName").value.trim(), p_role: $("nuRole").value,
+      });
+      m.className = "msg ok";
+      m.textContent = `เพิ่มผู้ใช้แล้ว — เข้าสู่ระบบด้วย "${loginName(r.email)}" และรหัสผ่านที่ตั้งไว้`;
+      m.hidden = false;
+      $("newUserForm").reset();
+      $("nuRole").value = "edit1";
+      loadUsers();
     } catch (err) {
-      m.textContent = "เข้าสู่ระบบไม่ได้: " + err.message; m.hidden = false;
+      m.className = "msg err"; m.textContent = "เพิ่มผู้ใช้ไม่สำเร็จ: " + err.message; m.hidden = false;
     }
-    btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
-  });
-
-  $("impLogout").addEventListener("click", () => {
-    const old = token;
-    clearSession();
-    renderImpAuth();
-    if (old) fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-      method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${old}` },
-    }).catch(() => {});
+    btn.disabled = false;
   });
 
   // ---------- Scanner (ใช้ร่วมกันทุกช่อง) ----------
   let scanner = null, scanTarget = null;
-
   document.querySelectorAll("[data-scan]").forEach((btn) => {
     btn.addEventListener("click", () => openScanner(btn.dataset.scan));
   });
-
   async function openScanner(targetId) {
     scanTarget = targetId;
     $("scanModal").style.display = "block";
@@ -1210,7 +1575,6 @@
       alert("เปิดกล้องไม่ได้ ตรวจสิทธิ์กล้องของเบราว์เซอร์");
     }
   }
-
   async function closeScanner() {
     if (scanner) {
       try { await scanner.stop(); scanner.clear(); } catch (e) {}
@@ -1218,7 +1582,6 @@
     }
     $("scanModal").style.display = "none";
   }
-
   function onScanResult(text) {
     if (!scanner) return;
     if (navigator.vibrate) navigator.vibrate(80);
@@ -1228,13 +1591,20 @@
     $(id).value = text.trim();
     $(id).dispatchEvent(new Event("input"));
   }
-
   $("scanCancel").addEventListener("click", closeScanner);
 
-  // ---------- เริ่มต้น ----------
-  fillAllOptions();
-  renderImpAuth();
-  loadInit();
+  // ---------- เริ่มต้น: มี session เดิม = เข้าแอปเลย ----------
+  (async () => {
+    if (!refreshToken) return showLogin("");
+    showLoading(true, "กำลังเข้าสู่ระบบ…");
+    const ok = await refreshSession();
+    if (ok) return startApp();
+    if (refreshToken) {
+      // ต่ออายุไม่ได้เพราะเน็ตมีปัญหา (ยังไม่ลบ session) — ลองเข้าแอปด้วยโทเคนเดิม
+      return startApp();
+    }
+    showLogin("หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+  })();
 </script>
 </body>
 </html>
