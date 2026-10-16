@@ -1,0 +1,5 @@
+# ไฟล์ Excel มีข้อมูลภายในบริษัท ไม่ต้องขึ้น GitHub (repo เป็น public)
+*.xlsx
+*.xlsm
+*.xls
+~$*

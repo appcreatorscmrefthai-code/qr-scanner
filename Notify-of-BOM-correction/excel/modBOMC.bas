@@ -1,0 +1,723 @@
+Attribute VB_Name = "modBOMC"
+Option Explicit
+
+' =============================================================================
+'  ซิงก์ไฟล์ Excel กลาง "แจ้งแก้ไข BOM" กับระบบเว็บ (Supabase project เดียวกับ BOM_Packing)
+'
+'  ปุ่ม 1  BOMC_Sync        : ซิงก์ข้อมูลแจ้งแก้ไข BOM
+'                              - ส่งค่า สถานะของงาน / เอ็นจิเนียร์ผู้รับผิดชอบ / วันที่แก้ไข ที่แก้ในชีตขึ้นระบบ
+'                              - แล้วดึงข้อมูลล่าสุดทั้งหมด (รวมที่แจ้งจากเว็บ/นำเข้า Excel) ลงชีต "แจ้งแก้ไข BOM by Line"
+'                              - ครั้งแรก: ถ้าชีตมีข้อมูลเดิมที่ยังไม่มี ID จะถามเพื่อย้ายขึ้นระบบให้ก่อน
+'  ปุ่ม 2  BOMC_SendMaster  : ส่งชีต "PD number" และ "Released products" ขึ้นระบบ (ใช้ค้นหาตอนสแกนในเว็บ)
+'  BOMC_CreateMenu          : สร้างชีต "เมนูระบบ" พร้อมปุ่มทั้ง 2 (รันครั้งเดียว)
+'
+'  ใช้ตัวเรียกเว็บมาตรฐานของ Windows (MSXML2) เท่านั้น ไม่มีการเรียก Windows API หรือรันโปรแกรมอื่น
+' =============================================================================
+
+Private Const SB_URL As String = "https://vmpcfiefryvfovqjhewy.supabase.co"
+Private Const SB_KEY As String = "sb_publishable_ZizU3_OdW6cOrouQXo7JsA_cYCySG9H"
+Private Const APP_TITLE As String = "แจ้งแก้ไข BOM"
+
+Private Const SH_ITEMS As String = "แจ้งแก้ไข BOM by Line"
+Private Const SH_PD As String = "PD number"
+Private Const SH_RP As String = "Released products"
+Private Const MENU_SHEET As String = "เมนูระบบ"
+Private Const BATCH_ROWS As Long = 2000
+
+' หัวคอลัมน์ในชีต ตามลำดับช่องที่ระบบส่งมา (ฟังก์ชัน bomc_export)
+Private Const ITEM_HEADS As String = "ID|No.|วันที่แจ้ง|ผู้แจ้ง|รหัสที่เอาไปใช้|ชื่อวัตถุดิบ|จำนวนที่ใช้|ชนิดการแก้ไข|รหัสเดิม (ถ้าทราบ)|รหัสงาน FG|เลข PD|ชื่องาน FG|วันที่นำไปใช้|รูปถ่าย|หมายเหตุ|สถานะของงาน|เอ็นจิเนียร์ผู้รับผิดชอบ|วันที่แก้ไข"
+' ชนิดข้อมูลของแต่ละช่อง: N = ตัวเลข, T = วันและเวลา, D = วันที่, S = ข้อความ
+Private Const ITEM_KINDS As String = "N|N|T|S|S|S|N|S|S|S|S|S|D|S|S|S|S|S"
+' ชื่อช่องในระบบ (ตรงลำดับกับ ITEM_HEADS)
+Private Const ITEM_KEYS As String = "id|no|created_at|reporter|rm_code|rm_name|qty|edit_type|old_code|fg_code|pd_number|fg_model|use_date|photo_url|note|status|engineer|fix_date"
+' ตำแหน่งช่องที่ใช้บ่อย (นับจาก 0 ตาม ITEM_HEADS)
+Private Const I_ID As Long = 0
+Private Const I_STATUS As Long = 15
+Private Const I_ENGINEER As Long = 16
+Private Const I_FIXDATE As Long = 17
+
+Private mToken As String
+Private mRefresh As String
+Private mExpire As Date
+Private mEmail As String
+Private mStatus As Long
+
+' =============================================================================
+'  ปุ่ม 1 : ซิงก์ข้อมูลแจ้งแก้ไข BOM
+' =============================================================================
+Public Sub BOMC_Sync()
+    Dim ws As Worksheet, lo As ListObject
+    Dim heads() As String, kinds() As String, keys() As String, idx() As Long
+    Dim data As Variant, nRows As Long, r As Long, i As Long, k As Variant
+    Dim edits() As String, nEdit As Long, legs() As String, nLeg As Long
+    Dim idVal As String, hasData As Boolean, part As String, resp As String, ok As Boolean
+    Dim migrated As Long, updated As Long, pulled As Long, msg As String, missing As String
+
+    On Error GoTo Fail
+    If Not ItemsTable(ws, lo) Then Exit Sub
+    heads = Split(ITEM_HEADS, "|")
+    kinds = Split(ITEM_KINDS, "|")
+    keys = Split(ITEM_KEYS, "|")
+    ReDim idx(0 To UBound(heads))
+    For i = 0 To UBound(heads)
+        idx(i) = HeadIndex(lo, heads(i))
+    Next i
+    For Each k In Array(I_ID, I_STATUS, I_ENGINEER, I_FIXDATE)
+        If idx(k) = 0 Then
+            Tell "ไม่พบคอลัมน์ """ & heads(k) & """ ในตารางของชีต """ & SH_ITEMS & """", True
+            Exit Sub
+        End If
+    Next k
+
+    ' ---- อ่านชีต แยกแถวที่มี ID (ส่งค่าที่แก้) กับแถวเดิมที่ยังไม่มี ID (ยังไม่อยู่ในระบบ)
+    If Not lo.DataBodyRange Is Nothing Then
+        data = lo.DataBodyRange.Value
+        nRows = UBound(data, 1)
+    End If
+    If nRows > 0 Then
+        ReDim edits(1 To nRows)
+        ReDim legs(1 To nRows)
+    End If
+    For r = 1 To nRows
+        idVal = CellText(data(r, idx(I_ID)))
+        If Len(idVal) > 0 And IsNumeric(idVal) Then
+            nEdit = nEdit + 1
+            edits(nEdit) = "{""id"":" & CStr(CLng(Val(idVal))) _
+                & ",""status"":" & JStr(CellText(data(r, idx(I_STATUS)))) _
+                & ",""engineer"":" & JStr(CellText(data(r, idx(I_ENGINEER)))) _
+                & ",""fix_date"":" & JStr(CellText(data(r, idx(I_FIXDATE)))) & "}"
+        Else
+            hasData = False
+            For i = 3 To 14
+                If idx(i) > 0 Then
+                    If Len(CellText(data(r, idx(i)))) > 0 Then hasData = True: Exit For
+                End If
+            Next i
+            If hasData Then
+                part = ""
+                For i = 1 To UBound(keys)
+                    If idx(i) > 0 Then
+                        part = part & IIf(Len(part) > 0, ",", "") & """" & keys(i) & """:" _
+                            & JStr(CellForJson(data(r, idx(i)), kinds(i)))
+                    End If
+                Next i
+                nLeg = nLeg + 1
+                legs(nLeg) = "{" & part & "}"
+            End If
+        End If
+    Next r
+
+    ' ---- ครั้งแรก: ย้ายข้อมูลเดิมขึ้นระบบ
+    If nLeg > 0 Then
+        For i = 1 To UBound(heads)
+            If idx(i) = 0 Then missing = missing & vbCrLf & "  - " & heads(i)
+        Next i
+        msg = "พบ " & nLeg & " แถวในชีต """ & SH_ITEMS & """ ที่ยังไม่อยู่ในระบบ (ข้อมูลเดิมจาก Google Sheet)" & vbCrLf & vbCrLf _
+            & "ย้ายขึ้นระบบตอนนี้เลยไหม? (ทำได้ครั้งเดียว)" & vbCrLf _
+            & "ถ้าเลือก ไม่ จะยกเลิกการซิงก์ เพราะการดึงข้อมูลลงชีตจะทำให้แถวเหล่านี้หาย"
+        If Len(missing) > 0 Then msg = msg & vbCrLf & vbCrLf & "คำเตือน: ไม่พบคอลัมน์ต่อไปนี้ในตาราง ข้อมูลช่องนี้จะว่าง:" & missing
+        If MsgBox(msg, vbQuestion + vbYesNo, APP_TITLE) <> vbYes Then Exit Sub
+        ReDim Preserve legs(1 To nLeg)
+        Status "กำลังย้ายข้อมูลเดิมขึ้นระบบ " & nLeg & " แถว..."
+        resp = Api("POST", "/rest/v1/rpc/bomc_migrate", "{""p_rows"":[" & Join(legs, ",") & "]}", ok)
+        If Not ok Then GoTo Done
+        If Not CallOk(resp, "ย้ายข้อมูลเดิมขึ้นระบบไม่สำเร็จ") Then GoTo Done
+        If InStr(Replace(resp, " ", ""), """ok"":false") > 0 Then
+            msg = "ย้ายข้อมูลเดิมไม่ได้: " & JsonText(resp, "error") & vbCrLf & vbCrLf _
+                & "แถวที่ไม่มี ID ในชีตจะถูกแทนที่ด้วยข้อมูลจากระบบ (แถวที่พิมพ์เพิ่มเองในชีตจะหาย" _
+                & " ถ้าต้องการเก็บ ให้แจ้งผ่านหน้าเว็บแทน)" & vbCrLf & vbCrLf & "ซิงก์ต่อไหม?"
+            Status ""
+            If MsgBox(msg, vbExclamation + vbYesNo, APP_TITLE) <> vbYes Then GoTo Done
+        Else
+            migrated = CLng(JsonNum(resp, "imported"))
+        End If
+    End If
+
+    ' ---- ส่งค่า สถานะ / เอ็นจิเนียร์ / วันที่แก้ไข ที่แก้ในชีต
+    If nEdit > 0 Then
+        ReDim Preserve edits(1 To nEdit)
+        Status "กำลังส่งค่าที่แก้ในชีตขึ้นระบบ..."
+        resp = Api("POST", "/rest/v1/rpc/bomc_update_from_excel", "{""p_rows"":[" & Join(edits, ",") & "]}", ok)
+        If Not ok Then GoTo Done
+        If Not CallOk(resp, "ส่งค่าที่แก้ขึ้นระบบไม่สำเร็จ (ยังไม่ได้ดึงข้อมูลลงชีต)") Then GoTo Done
+        updated = CLng(JsonNum(resp, "updated"))
+    End If
+
+    ' ---- ดึงข้อมูลล่าสุดทั้งหมดลงชีต
+    Status "กำลังดึงข้อมูลล่าสุดจากระบบ..."
+    resp = Api("POST", "/rest/v1/rpc/bomc_export", "{}", ok)
+    If Not ok Then GoTo Done
+    If Not CallOk(resp, "ดึงข้อมูลจากระบบไม่สำเร็จ") Then GoTo Done
+    Status "กำลังเขียนข้อมูลลงชีต..."
+    Application.ScreenUpdating = False
+    pulled = WriteItems(lo, idx, kinds, JsonUnquote(resp))
+    Application.ScreenUpdating = True
+
+    msg = "ซิงก์เรียบร้อย" & vbCrLf & vbCrLf
+    If migrated > 0 Then msg = msg & "ย้ายข้อมูลเดิมขึ้นระบบ: " & migrated & " แถว" & vbCrLf
+    msg = msg & "ส่งค่าที่แก้ (สถานะ/เอ็นจิเนียร์/วันที่แก้ไข): " & updated & " แถว" & vbCrLf _
+        & "ข้อมูลในชีตตอนนี้: " & pulled & " แถว"
+    Tell msg
+Done:
+    Status ""
+    Exit Sub
+Fail:
+    Application.ScreenUpdating = True
+    Status ""
+    Tell "เกิดข้อผิดพลาด: " & Err.Description, True
+End Sub
+
+' =============================================================================
+'  ปุ่ม 2 : ส่ง PD number + Released products ขึ้นระบบ
+' =============================================================================
+Public Sub BOMC_SendMaster()
+    Dim n1 As Long, n2 As Long
+    On Error GoTo Fail
+    If MsgBox("ส่งชีต """ & SH_PD & """ และ """ & SH_RP & """ ขึ้นระบบ" & vbCrLf _
+        & "(แถวที่มีอยู่แล้วจะอัปเดตเป็นค่าล่าสุด แถวใหม่จะเพิ่มเข้าไป)" & vbCrLf & vbCrLf & "ทำต่อไหม?", _
+        vbQuestion + vbYesNo, APP_TITLE) <> vbYes Then Exit Sub
+
+    n1 = UploadSheet(SH_PD, "bomc_pd_number", "qr", _
+        "QR|PD number|FG Model|FG Type|Item number", "qr|pd_number|fg_model|fg_type|item_number")
+    If n1 < 0 Then GoTo Done
+    n2 = UploadSheet(SH_RP, "bomc_released_products", "qr_code", _
+        "QR code|Item number|Product name|BOM unit", "qr_code|item_number|product_name|bom_unit")
+    If n2 < 0 Then GoTo Done
+    Tell "ส่งขึ้นระบบเรียบร้อย" & vbCrLf & vbCrLf & SH_PD & ": " & n1 & " แถว" & vbCrLf & SH_RP & ": " & n2 & " แถว" _
+        & vbCrLf & vbCrLf & "หมายเหตุ: หน้าเว็บจะเห็นข้อมูลใหม่หลังเปิดใหม่ (เว็บเก็บข้อมูลค้นหาไว้ในเครื่อง 1 ชั่วโมง)"
+Done:
+    Status ""
+    Exit Sub
+Fail:
+    Status ""
+    Tell "เกิดข้อผิดพลาด: " & Err.Description, True
+End Sub
+
+' =============================================================================
+'  สร้างชีตเมนูพร้อมปุ่ม (รันครั้งเดียว)
+' =============================================================================
+Public Sub BOMC_CreateMenu()
+    Dim ws As Worksheet, b As Object
+    Set ws = FindSheet(MENU_SHEET)
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+        ws.Name = MENU_SHEET
+    End If
+    On Error Resume Next
+    ws.Buttons.Delete
+    On Error GoTo 0
+    ws.Range("B2").Value = "ซิงก์ข้อมูลกับระบบเว็บ แจ้งแก้ไข BOM"
+    ws.Range("B2").Font.Bold = True
+    ws.Range("B2").Font.Size = 14
+
+    Set b = ws.Buttons.Add(ws.Range("B4").Left, ws.Range("B4").Top, 320, 34)
+    b.Caption = "1) ซิงก์ข้อมูลแจ้งแก้ไข BOM"
+    b.OnAction = "BOMC_Sync"
+    ws.Range("B7").Value = "ส่ง สถานะของงาน / เอ็นจิเนียร์ผู้รับผิดชอบ / วันที่แก้ไข ที่แก้ในชีต """ & SH_ITEMS & """ ขึ้นระบบ แล้วดึงข้อมูลล่าสุดลงชีต"
+
+    Set b = ws.Buttons.Add(ws.Range("B9").Left, ws.Range("B9").Top, 320, 34)
+    b.Caption = "2) ส่ง PD number / Released products ขึ้นระบบ"
+    b.OnAction = "BOMC_SendMaster"
+    ws.Range("B12").Value = "ทำเมื่อชีต """ & SH_PD & """ หรือ """ & SH_RP & """ มีข้อมูลใหม่ (ใช้ค้นหาตอนสแกนในเว็บ)"
+
+    ws.Range("B14").Value = "แก้ได้เฉพาะคอลัมน์ สถานะของงาน / เอ็นจิเนียร์ผู้รับผิดชอบ / วันที่แก้ไข  ห้ามแก้หรือลบคอลัมน์ ID" _
+        & "  (คอลัมน์อื่นที่เพิ่มเองในตารางจะถูกล้างทุกครั้งที่ซิงก์)"
+    ws.Range("B14").Font.Color = RGB(192, 0, 0)
+    ws.Columns("B").ColumnWidth = 110
+    ws.Activate
+    Tell "สร้างชีต """ & MENU_SHEET & """ พร้อมปุ่มแล้ว"
+End Sub
+
+' =============================================================================
+'  ตารางข้อมูลแจ้งแก้ไข
+' =============================================================================
+Private Function ItemsTable(ByRef ws As Worksheet, ByRef lo As ListObject) As Boolean
+    Set ws = FindSheet(SH_ITEMS)
+    If ws Is Nothing Then
+        Tell "ไม่พบชีต """ & SH_ITEMS & """", True
+        Exit Function
+    End If
+    If ws.ListObjects.Count = 0 Then
+        ' ยังไม่เป็นตาราง: แปลงช่วงข้อมูลที่เริ่มจาก A1 เป็นตาราง
+        Set lo = ws.ListObjects.Add(1, ws.Range("A1").CurrentRegion, , 1)
+    Else
+        Set lo = ws.ListObjects(1)
+    End If
+    ' เพิ่มคอลัมน์ ID ท้ายตาราง (ใช้จับคู่แถวกับระบบ) ถ้ายังไม่มี
+    If HeadIndex(lo, "ID") = 0 Then lo.ListColumns.Add.Name = "ID"
+    ItemsTable = True
+End Function
+
+Private Function HeadIndex(ByVal lo As ListObject, ByVal name As String) As Long
+    Dim i As Long
+    For i = 1 To lo.HeaderRowRange.Columns.Count
+        If StrComp(Trim$(CStr(lo.HeaderRowRange.Cells(1, i).Value)), name, vbTextCompare) = 0 Then
+            HeadIndex = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' เขียนข้อมูลจากระบบลงตาราง (แทนที่ข้อมูลเดิมทั้งหมด) คืนจำนวนแถว
+Private Function WriteItems(ByVal lo As ListObject, idx() As Long, kinds() As String, ByVal s As String) As Long
+    Dim rowsTxt() As String, f() As String, outArr() As Variant
+    Dim n As Long, nCols As Long, r As Long, i As Long, c As Long
+    Dim target As Range
+
+    nCols = lo.ListColumns.Count
+    If Len(s) > 0 Then
+        rowsTxt = Split(s, Chr$(30))
+        n = UBound(rowsTxt) + 1
+    End If
+    If lo.ShowAutoFilter Then
+        If lo.AutoFilter.FilterMode Then lo.AutoFilter.ShowAllData
+    End If
+    If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.ClearContents
+    If n = 0 Then
+        lo.Resize lo.HeaderRowRange.Resize(2)
+        Exit Function
+    End If
+
+    ReDim outArr(1 To n, 1 To nCols)
+    For r = 1 To n
+        f = Split(rowsTxt(r - 1), Chr$(31))
+        For i = 0 To UBound(idx)
+            c = idx(i)
+            If c > 0 And i <= UBound(f) Then outArr(r, c) = ToCell(f(i), kinds(i))
+        Next i
+    Next r
+
+    Set target = lo.HeaderRowRange.Offset(1, 0).Resize(n, nCols)
+    For i = 0 To UBound(idx)
+        c = idx(i)
+        If c > 0 Then
+            Select Case kinds(i)
+                Case "S": target.Columns(c).NumberFormat = "@"
+                Case "T": target.Columns(c).NumberFormat = "d/m/yyyy h:mm:ss"
+                Case "D": target.Columns(c).NumberFormat = "d/m/yyyy"
+                Case Else: target.Columns(c).NumberFormat = "General"
+            End Select
+        End If
+    Next i
+    target.Value = outArr
+    lo.Resize lo.HeaderRowRange.Resize(n + 1)
+    WriteItems = n
+End Function
+
+' ข้อความจากระบบ -> ค่าที่ใส่ในเซลล์
+Private Function ToCell(ByVal v As String, ByVal kind As String) As Variant
+    If Len(v) = 0 Then
+        ToCell = Empty
+        Exit Function
+    End If
+    Select Case kind
+        Case "N"
+            ToCell = Val(v)
+        Case "T"   ' YYYY-MM-DD HH:MM:SS
+            ToCell = DateSerial(CInt(Mid$(v, 1, 4)), CInt(Mid$(v, 6, 2)), CInt(Mid$(v, 9, 2))) _
+                   + TimeSerial(CInt(Mid$(v, 12, 2)), CInt(Mid$(v, 15, 2)), CInt(Mid$(v, 18, 2)))
+        Case "D"   ' YYYY-MM-DD
+            ToCell = DateSerial(CInt(Mid$(v, 1, 4)), CInt(Mid$(v, 6, 2)), CInt(Mid$(v, 9, 2)))
+        Case Else
+            ToCell = v
+    End Select
+End Function
+
+' ค่าในเซลล์ -> ข้อความ (วันที่เป็น วัน/เดือน/ปี ค.ศ.)
+Private Function CellText(ByVal v As Variant) As String
+    If IsError(v) Or IsEmpty(v) Or IsNull(v) Then Exit Function
+    If VarType(v) = vbDate Then
+        CellText = Day(v) & "/" & Month(v) & "/" & Year(v)
+    Else
+        CellText = Trim$(CStr(v))
+    End If
+End Function
+
+' ค่าในเซลล์ -> ข้อความสำหรับส่งข้อมูลเดิมขึ้นระบบ ตามชนิดช่อง
+Private Function CellForJson(ByVal v As Variant, ByVal kind As String) As String
+    Dim d As Date
+    If IsError(v) Or IsEmpty(v) Or IsNull(v) Then Exit Function
+    Select Case kind
+        Case "N"
+            If IsNumeric(v) Then CellForJson = Trim$(Str$(CDbl(v)))
+        Case "T"
+            If ToDate(v, d) Then CellForJson = IsoDate(d) & " " & Right$("0" & Hour(d), 2) & ":" _
+                & Right$("0" & Minute(d), 2) & ":" & Right$("0" & Second(d), 2)
+        Case "D"
+            If ToDate(v, d) Then CellForJson = IsoDate(d)
+        Case Else
+            CellForJson = CellText(v)
+    End Select
+End Function
+
+' แปลงค่าเซลล์เป็นวันที่ (รองรับเซลล์วันที่ และข้อความ วัน/เดือน/ปี ค.ศ. หรือ ปี-เดือน-วัน)
+Private Function ToDate(ByVal v As Variant, ByRef d As Date) As Boolean
+    Dim p() As String, s As String, t As String, tp() As String
+    On Error GoTo Bad
+    If VarType(v) = vbDate Then
+        d = v
+        ToDate = True
+        Exit Function
+    End If
+    If IsNumeric(v) Then
+        If CDbl(v) > 0 Then
+            d = CDate(CDbl(v))
+            ToDate = True
+        End If
+        Exit Function
+    End If
+    s = Trim$(CStr(v))
+    If InStr(s, " ") > 0 Then
+        t = Trim$(Mid$(s, InStr(s, " ") + 1))
+        s = Left$(s, InStr(s, " ") - 1)
+    End If
+    If InStr(s, "/") > 0 Then
+        p = Split(s, "/")
+        If UBound(p) <> 2 Then Exit Function
+        d = DateSerial(CInt(p(2)), CInt(p(1)), CInt(p(0)))
+    ElseIf InStr(s, "-") > 0 Then
+        p = Split(s, "-")
+        If UBound(p) <> 2 Then Exit Function
+        d = DateSerial(CInt(p(0)), CInt(p(1)), CInt(p(2)))
+    Else
+        Exit Function
+    End If
+    If Len(t) > 0 Then
+        tp = Split(t, ":")
+        If UBound(tp) >= 1 Then
+            d = d + TimeSerial(CInt(tp(0)), CInt(tp(1)), IIf(UBound(tp) >= 2, CInt(Val(tp(UBound(tp)))), 0))
+        End If
+    End If
+    ToDate = True
+    Exit Function
+Bad:
+    ToDate = False
+End Function
+
+Private Function IsoDate(ByVal d As Date) As String
+    IsoDate = Year(d) & "-" & Right$("0" & Month(d), 2) & "-" & Right$("0" & Day(d), 2)
+End Function
+
+' =============================================================================
+'  ส่งชีตข้อมูลค้นหาขึ้นระบบ (เพิ่มใหม่ / อัปเดตตามรหัส QR)  คืนจำนวนแถว, -1 = ไม่สำเร็จ/ยกเลิก
+' =============================================================================
+Private Function UploadSheet(ByVal sheetName As String, ByVal table As String, ByVal keyField As String, _
+                             ByVal headList As String, ByVal fieldList As String) As Long
+    Dim ws As Worksheet, heads() As String, fields() As String, cols() As Long
+    Dim lastRow As Long, lastCol As Long, data As Variant
+    Dim r As Long, i As Long, c As Long, n As Long, keyVal As String, part As String
+    Dim parts() As String, seen As Object, total As Long, sent As Long, b As Long, bEnd As Long
+    Dim batch() As String, resp As String, ok As Boolean, v As Variant
+
+    UploadSheet = -1
+    Set ws = FindSheet(sheetName)
+    If ws Is Nothing Then
+        Tell "ไม่พบชีต """ & sheetName & """", True
+        Exit Function
+    End If
+    heads = Split(headList, "|")
+    fields = Split(fieldList, "|")
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    If lastRow < 2 Then
+        Tell "ชีต """ & sheetName & """ ไม่มีข้อมูล", True
+        Exit Function
+    End If
+    ReDim cols(0 To UBound(heads))
+    For i = 0 To UBound(heads)
+        For c = 1 To lastCol
+            If StrComp(Trim$(CStr(ws.Cells(1, c).Value)), heads(i), vbTextCompare) = 0 Then cols(i) = c: Exit For
+        Next c
+    Next i
+    If cols(0) = 0 Then
+        Tell "ไม่พบคอลัมน์ """ & heads(0) & """ ในชีต """ & sheetName & """", True
+        Exit Function
+    End If
+
+    data = ws.Range(ws.Cells(2, 1), ws.Cells(lastRow, lastCol)).Value
+    If Not IsArray(data) Then
+        v = data
+        ReDim data(1 To 1, 1 To 1)
+        data(1, 1) = v
+    End If
+    Set seen = CreateObject("Scripting.Dictionary")
+    ReDim parts(1 To UBound(data, 1))
+    For r = 1 To UBound(data, 1)
+        keyVal = CellText(data(r, cols(0)))
+        If Len(keyVal) > 0 Then
+            part = """" & fields(0) & """:" & JStr(keyVal)
+            For i = 1 To UBound(heads)
+                If cols(i) > 0 Then
+                    part = part & ",""" & fields(i) & """:" & JStr(CellText(data(r, cols(i))))
+                Else
+                    part = part & ",""" & fields(i) & """:null"
+                End If
+            Next i
+            ' รหัส QR ซ้ำในชีต: ใช้แถวล่างสุด
+            If seen.Exists(keyVal) Then
+                parts(seen(keyVal)) = "{" & part & "}"
+            Else
+                n = n + 1
+                parts(n) = "{" & part & "}"
+                seen.Add keyVal, n
+            End If
+        End If
+    Next r
+    total = n
+
+    For b = 1 To total Step BATCH_ROWS
+        bEnd = b + BATCH_ROWS - 1
+        If bEnd > total Then bEnd = total
+        ReDim batch(b To bEnd)
+        For i = b To bEnd
+            batch(i) = parts(i)
+        Next i
+        Status "กำลังส่ง " & sheetName & " ... " & bEnd & " / " & total
+        resp = Api("POST", "/rest/v1/" & table & "?on_conflict=" & keyField, "[" & Join(batch, ",") & "]", ok, _
+                   "resolution=merge-duplicates,return=minimal")
+        If Not ok Then Exit Function
+        If Not CallOk(resp, "ส่ง " & sheetName & " ไม่สำเร็จ (ส่งได้แล้ว " & sent & " แถว)") Then Exit Function
+        sent = bEnd
+    Next b
+    UploadSheet = total
+End Function
+
+' =============================================================================
+'  เข้าสู่ระบบ + เรียกระบบผ่านอินเทอร์เน็ต
+' =============================================================================
+Private Function Http(ByVal method As String, ByVal path As String, Optional ByVal body As String = "", _
+                      Optional ByVal token As String = "", Optional ByVal prefer As String = "") As String
+    Dim x As Object
+    Set x = CreateObject("MSXML2.XMLHTTP.6.0")
+    x.Open method, SB_URL & path, False
+    x.setRequestHeader "apikey", SB_KEY
+    If Len(token) > 0 Then x.setRequestHeader "Authorization", "Bearer " & token
+    If Len(prefer) > 0 Then x.setRequestHeader "Prefer", prefer
+    x.setRequestHeader "Accept", "application/json"
+    x.setRequestHeader "If-Modified-Since", "Sat, 01 Jan 2000 00:00:00 GMT"
+    If Len(body) > 0 Then
+        x.setRequestHeader "Content-Type", "application/json; charset=utf-8"
+        x.send body
+    Else
+        x.send
+    End If
+    mStatus = x.Status
+    Http = x.responseText
+End Function
+
+' คืนโทเคนที่ใช้ได้ (ยังไม่เข้าสู่ระบบจะถามอีเมลและรหัสผ่าน) ยกเลิกคืนค่าว่าง
+Private Function GetToken() As String
+    Dim r As String, email As String, pw As String
+    If Len(mToken) > 0 And Now < mExpire Then
+        GetToken = mToken
+        Exit Function
+    End If
+    If Len(mRefresh) > 0 Then
+        r = Http("POST", "/auth/v1/token?grant_type=refresh_token", "{""refresh_token"":" & JStr(mRefresh) & "}")
+        If mStatus = 200 Then
+            StoreSession r
+            GetToken = mToken
+            Exit Function
+        End If
+        mToken = ""
+        mRefresh = ""
+    End If
+    email = Trim$(InputBox("เข้าสู่ระบบ (ผู้ใช้เดียวกับหน้าเว็บ BOM Packing)" & vbCrLf & vbCrLf & "อีเมล", APP_TITLE, mEmail))
+    If Len(email) = 0 Then Exit Function
+    pw = InputBox("รหัสผ่านของ " & email & vbCrLf & vbCrLf _
+        & "ข้อควรระวัง: ตัวอักษรที่พิมพ์จะแสดงบนจอ และระบบจะจำการเข้าสู่ระบบไว้จนกว่าจะปิดไฟล์นี้", APP_TITLE)
+    If Len(pw) = 0 Then Exit Function
+    r = Http("POST", "/auth/v1/token?grant_type=password", "{""email"":" & JStr(LCase$(email)) & ",""password"":" & JStr(pw) & "}")
+    If mStatus <> 200 Then
+        If mStatus = 400 Or mStatus = 401 Then
+            Tell "เข้าสู่ระบบไม่สำเร็จ: อีเมลหรือรหัสผ่านไม่ถูกต้อง", True
+        Else
+            Tell "เข้าสู่ระบบไม่สำเร็จ: " & ErrText(r), True
+        End If
+        Exit Function
+    End If
+    StoreSession r
+    mEmail = email
+    GetToken = mToken
+End Function
+
+Private Sub StoreSession(ByVal r As String)
+    Dim sec As Double
+    mToken = JsonText(r, "access_token")
+    mRefresh = JsonText(r, "refresh_token")
+    sec = JsonNum(r, "expires_in")
+    If sec <= 0 Then sec = 3600
+    mExpire = Now + (sec - 60) / 86400#
+End Sub
+
+' เรียกระบบด้วยสิทธิ์ผู้ใช้ ถ้าโทเคนหมดอายุจะต่ออายุแล้วลองอีกครั้ง (ok = False เมื่อยกเลิกการเข้าสู่ระบบ)
+Private Function Api(ByVal method As String, ByVal path As String, ByVal body As String, ByRef ok As Boolean, _
+                     Optional ByVal prefer As String = "") As String
+    Dim t As String, r As String
+    ok = False
+    t = GetToken()
+    If Len(t) = 0 Then Exit Function
+    r = Http(method, path, body, t, prefer)
+    If mStatus = 401 Then
+        mToken = ""
+        t = GetToken()
+        If Len(t) = 0 Then Exit Function
+        r = Http(method, path, body, t, prefer)
+    End If
+    ok = True
+    Api = r
+End Function
+
+' ตรวจผลการเรียก: สำเร็จคืน True, ไม่สำเร็จแสดงข้อความแล้วคืน False
+Private Function CallOk(ByVal resp As String, ByVal title As String) As Boolean
+    If mStatus >= 200 And mStatus < 300 Then
+        CallOk = True
+    Else
+        Tell title & vbCrLf & vbCrLf & "(HTTP " & mStatus & ") " & ErrText(resp), True
+    End If
+End Function
+
+Private Function ErrText(ByVal r As String) As String
+    Dim s As String
+    s = JsonText(r, "message")
+    If Len(s) = 0 Then s = JsonText(r, "msg")
+    If Len(s) = 0 Then s = JsonText(r, "error_description")
+    If Len(s) = 0 Then s = JsonText(r, "error")
+    If Len(s) = 0 Then s = Left$(r, 300)
+    ErrText = s
+End Function
+
+' =============================================================================
+'  JSON
+' =============================================================================
+Private Function JsonEsc(ByVal s As String) As String
+    Dim i As Long
+    s = Replace(s, "\", "\\")
+    s = Replace(s, """", "\""")
+    s = Replace(s, vbCrLf, "\n")
+    s = Replace(s, vbCr, "\n")
+    s = Replace(s, vbLf, "\n")
+    s = Replace(s, vbTab, "\t")
+    For i = 0 To 31
+        If InStr(s, Chr$(i)) > 0 Then s = Replace(s, Chr$(i), " ")
+    Next i
+    JsonEsc = s
+End Function
+
+' ข้อความ -> ค่า JSON (ว่าง = null)
+Private Function JStr(ByVal s As String) As String
+    If Len(s) = 0 Then
+        JStr = "null"
+    Else
+        JStr = """" & JsonEsc(s) & """"
+    End If
+End Function
+
+' อ่านค่าข้อความของ key จาก JSON (ไม่พบคืนค่าว่าง)
+Private Function JsonText(ByVal json As String, ByVal key As String) As String
+    Dim p As Long, q As Long
+    p = InStr(json, """" & key & """")
+    If p = 0 Then Exit Function
+    p = InStr(p + Len(key) + 2, json, ":")
+    If p = 0 Then Exit Function
+    p = p + 1
+    Do While Mid$(json, p, 1) = " "
+        p = p + 1
+    Loop
+    If Mid$(json, p, 1) <> """" Then Exit Function
+    q = p + 1
+    Do While q <= Len(json)
+        If Mid$(json, q, 1) = "\" Then
+            q = q + 2
+        ElseIf Mid$(json, q, 1) = """" Then
+            Exit Do
+        Else
+            q = q + 1
+        End If
+    Loop
+    JsonText = JsonUnquote(Mid$(json, p, q - p + 1))
+End Function
+
+' อ่านค่าตัวเลขของ key จาก JSON (ไม่พบคืน 0)
+Private Function JsonNum(ByVal json As String, ByVal key As String) As Double
+    Dim p As Long, i As Long, ch As String, s As String
+    p = InStr(json, """" & key & """")
+    If p = 0 Then Exit Function
+    p = InStr(p + Len(key) + 2, json, ":")
+    If p = 0 Then Exit Function
+    For i = p + 1 To Len(json)
+        ch = Mid$(json, i, 1)
+        If ch Like "[0-9.-]" Then
+            s = s & ch
+        ElseIf Len(s) > 0 Or ch <> " " Then
+            Exit For
+        End If
+    Next i
+    JsonNum = Val(s)
+End Function
+
+' แปลงค่าข้อความ JSON ("...") เป็นข้อความปกติ
+Private Function JsonUnquote(ByVal s As String) As String
+    Dim n As Long, i As Long, p As Long, o As Long, ch As String, buf As String
+    s = Trim$(s)
+    If Len(s) < 2 Or Left$(s, 1) <> """" Then Exit Function
+    s = Mid$(s, 2, Len(s) - 2)
+    n = Len(s)
+    If n = 0 Then Exit Function
+    buf = Space$(n)
+    i = 1
+    Do While i <= n
+        p = InStr(i, s, "\")
+        If p = 0 Then
+            Mid$(buf, o + 1, n - i + 1) = Mid$(s, i)
+            o = o + (n - i + 1)
+            Exit Do
+        End If
+        If p > i Then
+            Mid$(buf, o + 1, p - i) = Mid$(s, i, p - i)
+            o = o + (p - i)
+        End If
+        ch = Mid$(s, p + 1, 1)
+        If ch = "u" Then
+            ch = ChrW$(CLng("&H" & Mid$(s, p + 2, 4)))
+            i = p + 6
+        Else
+            Select Case ch
+                Case "n": ch = vbLf
+                Case "r": ch = vbCr
+                Case "t": ch = vbTab
+                Case "b": ch = Chr$(8)
+                Case "f": ch = Chr$(12)
+            End Select
+            i = p + 2
+        End If
+        o = o + 1
+        Mid$(buf, o, 1) = ch
+    Loop
+    JsonUnquote = Left$(buf, o)
+End Function
+
+' =============================================================================
+'  ทั่วไป
+' =============================================================================
+Private Function FindSheet(ByVal name As String) As Worksheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(name)
+    On Error GoTo 0
+    Set FindSheet = ws
+End Function
+
+Private Sub Tell(ByVal msg As String, Optional ByVal isError As Boolean = False)
+    Status ""
+    MsgBox msg, IIf(isError, vbExclamation, vbInformation), APP_TITLE
+End Sub
+
+Private Sub Status(ByVal msg As String)
+    If Len(msg) = 0 Then
+        Application.StatusBar = False
+    Else
+        Application.StatusBar = msg
+        DoEvents
+    End If
+End Sub

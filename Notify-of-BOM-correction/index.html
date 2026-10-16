@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>แจ้งแก้ไข BOM</title>
+<meta name="theme-color" content="#1a5fb4">
+<link rel="icon" href="favicon.ico?v=2" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=2">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="แจ้งแก้ไข BOM">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -134,6 +142,8 @@
   .imp-status-row select { flex: 1; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; }
   .imp-warn { color: var(--orange); font-size: 13px; margin-top: 6px; }
   .imp-count { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .imp-user { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 12px; font-size: 13px; color: var(--muted); }
 
   @media (min-width: 560px) {
     .toolbar select { min-width: 160px; }
@@ -295,7 +305,28 @@
 
   <!-- ====================== นำเข้า Excel ====================== -->
   <section id="view-import" class="view">
-    <div class="card">
+    <div class="card" id="impLoginCard">
+      <h2>เข้าสู่ระบบเพื่อนำเข้าข้อมูล</h2>
+      <form id="impLoginForm">
+        <div class="field">
+          <label>อีเมล</label>
+          <input id="impEmail" type="email" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label>รหัสผ่าน</label>
+          <input id="impPassword" type="password" autocomplete="current-password" required>
+        </div>
+        <div id="impLoginMsg" class="msg err" hidden></div>
+        <button type="submit" id="impLoginBtn" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
+      </form>
+    </div>
+
+    <div class="imp-user" id="impUserBar" hidden>
+      <span id="impUserText"></span>
+      <button type="button" id="impLogout" class="btn btn-ghost btn-small">ออกจากระบบ</button>
+    </div>
+
+    <div class="card" id="impFileCard" hidden>
       <h2><span class="n">1</span>เลือกไฟล์ Excel</h2>
       <div class="field">
         <label>ไฟล์ข้อมูล (.xlsx)</label>
@@ -331,8 +362,8 @@
           <thead>
             <tr>
               <th>#</th><th>รหัสงาน FG</th><th>เลข PD</th><th>ชื่องาน FG</th>
-              <th>รหัสที่เอาไปใช้</th><th>ชื่อวัตถุดิบ</th><th>จำนวน</th>
-              <th>รหัสเดิม</th><th>สถานะ</th>
+              <th>รหัสที่เอาไปใช้ (New Item)</th><th>ชื่อวัตถุดิบ</th><th>จำนวน</th>
+              <th>รหัสเดิม (Item Number)</th><th>สถานะ</th>
             </tr>
           </thead>
           <tbody id="impPreviewBody"></tbody>
@@ -357,26 +388,116 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-  // วาง URL ของ Web app (ลงท้ายด้วย /exec) ที่ได้จากการ Deploy Apps Script
-  const API_URL = "https://script.google.com/macros/s/AKfycbyl0SVGCDIBSFtR1_aJu-H9eCThos5S2Rqr3Y5eTeWYM2J9cgmYbGsJ0jr3OHdpKJDT/exec";
+  // ---------- Supabase (project เดียวกับ BOM_Packing) ----------
+  const SUPABASE_URL = "https://vmpcfiefryvfovqjhewy.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_ZizU3_OdW6cOrouQXo7JsA_cYCySG9H";
+  const PHOTO_BUCKET = "bomc-photos";
+
+  // ตัวเลือกในฟอร์ม (เดิมอยู่ใน Code.gs) — แก้รายชื่อได้ที่นี่
+  const REPORTERS = ["ปู", "ต้น", "ไมค์", "พีช", "เด่น", "เต้ย", "PN"];
+  const EDIT_TYPES = ["เพิ่ม", "ทดแทน (ชั่วคราว)", "ทดแทน (ถาวร)", "เอาออก"];
+  const STATUSES = ["อยู่ระหว่างดำเนินการ", "แจ้งแก้ไข", "แก้ไขแล้ว"];
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const todayStr = () => new Date().toISOString().slice(0, 10);
+  // วันที่วันนี้ตามเวลาเครื่อง (toISOString เป็นเวลา UTC ก่อน 7 โมงเช้าจะได้วันของเมื่อวาน)
+  const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const pad2 = (n) => String(n).padStart(2, "0");
+  function fmtDateTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return String(iso);
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+  function fmtDate(ymd) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || "");
+    return m ? `${+m[3]}/${+m[2]}/${m[1]}` : (ymd || "");
+  }
 
-  async function post(body) {
-    // เติม query string สุ่มกันเครือข่ายมือถือ/พร็อกซีค่าย (เช่นโหมดประหยัดเน็ต) แคช URL เดิมไว้
-    // แล้วตอบ GET เก่ากลับมาแทนที่จะยิงคำสั่ง POST จริงๆ (ทำให้ได้ "BOM Change Request API" แทน JSON)
-    const url = API_URL + (API_URL.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
-    const res = await fetch(url, { method: "POST", body: JSON.stringify(body), cache: "no-store" });
+  // ---------- เข้าสู่ระบบ (ใช้ร่วมกับหน้า BOM Packing: login หน้าใดหน้าหนึ่ง อีกหน้าก็ใช้ได้เลย) ----------
+  const TOKEN_KEY = "bom_token";
+  const REFRESH_KEY = "bom_refresh";
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: (k) => { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  let token = store.get(TOKEN_KEY);
+  let refreshToken = store.get(REFRESH_KEY);
+
+  async function authCall(path, body) {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, data };
+  }
+  function saveSession(d) {
+    token = d.access_token; refreshToken = d.refresh_token;
+    store.set(TOKEN_KEY, token); store.set(REFRESH_KEY, refreshToken);
+  }
+  function clearSession() {
+    token = ""; refreshToken = "";
+    store.del(TOKEN_KEY); store.del(REFRESH_KEY);
+  }
+  async function refreshSession() {
+    if (!refreshToken) return false;
+    const { ok, data } = await authCall("token?grant_type=refresh_token", { refresh_token: refreshToken });
+    if (ok) { saveSession(data); return true; }
+    clearSession();
+    return false;
+  }
+  function tokenEmail() {
+    try {
+      const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const json = decodeURIComponent(atob(b64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join(""));
+      return JSON.parse(json).email || "";
+    } catch (e) { return ""; }
+  }
+
+  // เรียก Supabase (REST / RPC / Storage)  auth = true ใช้สิทธิ์ผู้ที่ login แล้ว
+  async function sb(path, { method = "GET", body, auth = false, headers = {} } = {}) {
+    const isBlob = body instanceof Blob;
+    const go = () => fetch(SUPABASE_URL + path, {
+      method,
+      cache: "no-store",
+      headers: {
+        apikey: SUPABASE_KEY,
+        ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(body !== undefined && !isBlob ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+      body: body === undefined ? undefined : (isBlob ? body : JSON.stringify(body)),
+    });
+    let res = await go();
+    if (res.status === 401 && auth && await refreshSession()) res = await go();
     const text = await res.text();
-    try { return JSON.parse(text); }
-    catch (e) {
-      // แสดงตัวอย่างข้อความที่เซิร์ฟเวอร์ตอบกลับจริงๆ ด้วย เพื่อช่วยวินิจฉัยว่าทำไมไม่ใช่ JSON
-      const snippet = text.replace(/\s+/g, " ").trim().slice(0, 200);
-      throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (HTTP " + res.status + "): " + (snippet || "(ว่างเปล่า)"));
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (!res.ok) {
+      if (res.status === 401 && auth) { clearSession(); renderImpAuth(); }
+      const m = (data && typeof data === "object" && (data.message || data.error_description || data.msg || data.error))
+        || String(text || "").replace(/\s+/g, " ").slice(0, 200);
+      throw new Error(`HTTP ${res.status}: ${m}`);
     }
+    return data;
+  }
+  const rpc = (name, args, auth = false) =>
+    sb(`/rest/v1/rpc/${name}`, { method: "POST", body: args || {}, auth });
+
+  // โหลดทุกแถวแบบแบ่งหน้า (Supabase ส่งได้สูงสุด 1000 แถวต่อครั้ง)
+  async function fetchAllRows(path) {
+    const PAGE = 1000;
+    let out = [];
+    for (let from = 0; ; from += PAGE) {
+      const rows = await sb(path, { headers: { Range: `${from}-${from + PAGE - 1}` } });
+      out = out.concat(rows || []);
+      if (!rows || rows.length < PAGE) break;
+    }
+    return out;
   }
 
   // ---------- Tabs ----------
@@ -392,15 +513,14 @@
   // ---------- โหลดข้อมูลค้นหาทั้งหมดครั้งเดียวตอนเปิดหน้า ----------
   // เดิมแต่ละครั้งที่พิมพ์จะยิงไปเซิร์ฟเวอร์ค้นหาใหม่ ("กำลังค้นหา…" ค้าง) ตอนนี้โหลดทั้งตาราง
   // PD number / Released products มาเก็บเป็น Map ในเบราว์เซอร์ตั้งแต่เปิดหน้า แล้วค้นหาในเครื่องทันที
-  let pdMap = new Map();   // รหัสงาน FG (ตัวพิมพ์ใหญ่) -> {pdNumber, fgModel, fgType, itemNumber}
-  let rmMap = new Map();   // รหัสที่เอาไปใช้ (ตัวพิมพ์ใหญ่) -> {productName, unit}
+  let pdMap = new Map();     // QR รหัสงาน FG (ตัวพิมพ์ใหญ่) -> {pdNumber, fgModel}
+  let rmMap = new Map();     // QR code วัตถุดิบ (ตัวพิมพ์ใหญ่) -> {productName, unit}
+  let rmByItem = new Map();  // Item number (ตัวพิมพ์ใหญ่) -> {productName, unit}  ใช้ตอนนำเข้า Excel
   let initReady = false;
-  let STATUS_OPTIONS_CACHE = []; // ค่าตัวเลือกสถานะของงาน ใช้ในหน้านำเข้า Excel ด้วย
 
-  // ---------- แคชข้อมูล init ไว้ในเครื่อง 1 ชม. ----------
+  // ---------- แคชข้อมูลค้นหาไว้ในเครื่อง 1 ชม. ----------
   // เปิดเว็บซ้ำภายใน 1 ชม. จะใช้ข้อมูลเดิมที่เคยโหลดไว้ทันที ไม่ต้องรอโหลดจากเซิร์ฟเวอร์ใหม่
-  // (ถ้าออกจากเว็บ/ปิดมือถือไปแล้วเปิดใหม่ภายใน 1 ชม. ก็ยังเร็วเหมือนเดิม)
-  const INIT_CACHE_KEY = "bomInitCache_v1";
+  const INIT_CACHE_KEY = "bomcLookupCache_v1";
   const INIT_CACHE_TTL = 60 * 60 * 1000; // 1 ชั่วโมง
 
   function readInitCache() {
@@ -415,27 +535,33 @@
 
   function writeInitCache(d) {
     try {
+      localStorage.removeItem("bomInitCache_v1"); // แคชของเวอร์ชัน Google Sheet เดิม
       localStorage.setItem(INIT_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d }));
     } catch (e) { /* โควต้าเต็มหรือเบราว์เซอร์บล็อก ไม่กระทบการใช้งาน แค่ไม่แคช */ }
   }
 
-  function applyInitData(d) {
-    fillOptions($("reporter"), d.reporters, "— เลือกผู้แจ้ง —");
-    fillOptions($("editType"), d.editTypes, "— เลือกชนิดการแก้ไข —");
-    fillOptions($("taskStatus"), d.statuses || [], "— เลือกสถานะ —");
-    fillOptions($("dashReporter"), d.reporters, "ผู้แจ้งทั้งหมด");
-    fillOptions($("dashStatus"), d.statuses || [], "สถานะทั้งหมด");
-    fillOptions($("impReporter"), d.reporters, "— เลือกผู้แจ้ง —");
-    if (d.reporters.includes("PN")) $("impReporter").value = "PN"; // ค่าเริ่มต้นสำหรับนำเข้า Excel
-    STATUS_OPTIONS_CACHE = d.statuses || [];
+  function fillAllOptions() {
+    fillOptions($("reporter"), REPORTERS, "— เลือกผู้แจ้ง —");
+    fillOptions($("editType"), EDIT_TYPES, "— เลือกชนิดการแก้ไข —");
+    fillOptions($("taskStatus"), STATUSES, "— เลือกสถานะ —");
+    fillOptions($("dashReporter"), REPORTERS, "ผู้แจ้งทั้งหมด");
+    fillOptions($("dashStatus"), STATUSES, "สถานะทั้งหมด");
+    fillOptions($("impReporter"), REPORTERS, "— เลือกผู้แจ้ง —");
+    if (REPORTERS.includes("PN")) $("impReporter").value = "PN"; // ค่าเริ่มต้นสำหรับนำเข้า Excel
+  }
 
+  // d = { pd: [[QR, PD number, FG Model], ...], rm: [[QR code, Product name, BOM unit, Item number], ...] }
+  function applyInitData(d) {
     pdMap.clear();
     rmMap.clear();
-    d.pd.forEach(([qr, pdNumber, fgModel, fgType, itemNumber]) => {
-      pdMap.set(qr.toUpperCase(), { pdNumber, fgModel, fgType, itemNumber });
+    rmByItem.clear();
+    (d.pd || []).forEach(([qr, pdNumber, fgModel]) => {
+      if (qr) pdMap.set(String(qr).toUpperCase(), { pdNumber, fgModel });
     });
-    d.rm.forEach(([qr, productName, unit]) => {
-      rmMap.set(qr.toUpperCase(), { productName, unit });
+    (d.rm || []).forEach(([qr, productName, unit, item]) => {
+      const rec = { productName, unit };
+      if (qr) rmMap.set(String(qr).toUpperCase(), rec);
+      if (item) rmByItem.set(String(item).trim().toUpperCase(), rec);
     });
     initReady = true;
   }
@@ -455,8 +581,7 @@
       return;
     }
     try {
-      const d = await post({ action: "init" });
-      if (!d.ok) throw new Error(d.error);
+      const d = await rpc("bomc_lookup");
       applyInitData(d);
       writeInitCache(d);
 
@@ -599,6 +724,24 @@
 
   $("useDate").value = todayStr();
 
+  // อัปโหลดรูปขึ้น Supabase Storage แล้วคืนลิงก์สำหรับเปิดดูรูป
+  async function uploadPhoto(p, folderKey, rmKey) {
+    const safe = (v) => String(v || "").replace(/[^A-Za-z0-9\-]/g, "_").slice(0, 60) || "x";
+    const d = new Date();
+    const stamp = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+    const path = `${safe(folderKey)}/${stamp}_${safe(rmKey)}_${Math.random().toString(36).slice(2, 7)}.jpg`;
+    const bin = atob(p.base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const enc = path.split("/").map(encodeURIComponent).join("/");
+    await sb(`/storage/v1/object/${PHOTO_BUCKET}/${enc}`, {
+      method: "POST",
+      body: new Blob([bytes], { type: p.mime }),
+      headers: { "Content-Type": p.mime, "x-upsert": "false" },
+    });
+    return `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${enc}`;
+  }
+
   function resetItemForm() {
     $("itemForm").reset();
     $("useDate").value = todayStr();
@@ -625,35 +768,33 @@
     const rmName = $("rmName").value.trim();
     if (!rmCode && !rmName) { $("rmName").focus(); return; }
 
-    const payload = {
-      header: {
-        reporter,
-        status,
-        fgCode: $("fgCode").value.trim(),
-        pdNumber: $("pdNumber").value.trim(),
-        fgModel: $("fgModel").value.trim(),
-      },
-      item: {
-        rmCode: rmCode,
-        productName: rmName,
-        qty: $("qty").value,
-        editType: $("editType").value,
-        oldCode: $("oldCode").value.trim(),
-        useDate: $("useDate").value,
-        note: $("note").value.trim(),
-      },
+    const fgCode = $("fgCode").value.trim();
+    const pdNumber = $("pdNumber").value.trim();
+    const fgModel = $("fgModel").value.trim();
+    const qty = Number($("qty").value);
+    if (!(qty > 0)) { $("qty").focus(); return; }
+
+    const row = {
+      reporter, status,
+      fg_code: fgCode || null, pd_number: pdNumber || null, fg_model: fgModel || null,
+      rm_code: rmCode || null, rm_name: rmName || null, qty,
+      edit_type: $("editType").value || null,
+      old_code: $("oldCode").value.trim() || null,
+      use_date: $("useDate").value || null,
+      note: $("note").value.trim() || null,
+      photo_url: null,
     };
-    if (photoData) { payload.item.photoBase64 = photoData.base64; payload.item.photoMime = photoData.mime; }
 
     const btn = $("saveBtn"), msg = $("saveMsg");
     btn.disabled = true; btn.textContent = "กำลังบันทึก…";
     msg.hidden = true;
     try {
-      const d = await post({ action: "saveItem", ...payload });
-      if (!d.ok) throw new Error(d.error || "บันทึกไม่สำเร็จ");
+      if (photoData) row.photo_url = await uploadPhoto(photoData, fgCode || pdNumber || fgModel || "misc", rmCode || rmName);
+      await sb("/rest/v1/bomc_items", { method: "POST", body: row, headers: { Prefer: "return=minimal" } });
+      dashLoaded = false; // ให้ Dashboard โหลดข้อมูลใหม่รอบหน้าที่เปิดแท็บ
       sessionItems.unshift({
         rm: rmCode, name: rmName || rmCode,
-        qty: payload.item.qty, editType: payload.item.editType,
+        qty: row.qty, editType: row.edit_type || "",
       });
       renderSession();
       resetItemForm();
@@ -678,6 +819,7 @@
   }
 
   function editBadge(type) {
+    if (!type) return "";
     const map = { "เพิ่ม": "add", "ทดแทน (ชั่วคราว)": "temp", "ทดแทน (ถาวร)": "perm", "เอาออก": "remove" };
     const cls = map[type] || "temp";
     return `<span class="badge ${cls}">${esc(type)}</span>`;
@@ -698,9 +840,15 @@
   async function loadDashboard() {
     $("dashList").innerHTML = `<div class="msg">กำลังโหลดข้อมูล…</div>`;
     try {
-      const d = await post({ action: "dashboard" });
-      if (!d.ok) throw new Error(d.error);
-      dashItems = d.items;
+      const rows = await fetchAllRows("/rest/v1/bomc_items?select=id,no,created_at,reporter,rm_code,rm_name,qty,edit_type,old_code,fg_code,pd_number,fg_model,use_date,photo_url,note,status,engineer,fix_date&order=created_at.asc,id.asc");
+      dashItems = rows.map((r) => ({
+        date: r.created_at, no: r.no, reporter: r.reporter || "",
+        rmCode: r.rm_code || "", rmName: r.rm_name || "", qty: r.qty ?? "",
+        editType: r.edit_type || "", oldCode: r.old_code || "",
+        fgCode: r.fg_code || "", pdNumber: r.pd_number || "", fgModel: r.fg_model || "",
+        useDate: fmtDate(r.use_date), photo: r.photo_url || "", note: r.note || "",
+        status: r.status || "", engineer: r.engineer || "", fixDate: r.fix_date || "",
+      }));
       dashLoaded = true;
       renderDashboard();
     } catch (err) {
@@ -726,7 +874,7 @@
       if (!tasks.has(key)) tasks.set(key, { fgCode: it.fgCode, fgModel: it.fgModel, pdNumber: it.pdNumber, status: it.status, engineer: it.engineer, fixDate: it.fixDate, items: [], last: it.date });
       const t = tasks.get(key);
       t.items.push(it);
-      if (String(it.date) > String(t.last)) t.last = it.date;
+      if (new Date(it.date) > new Date(t.last)) t.last = it.date;
       if (!t.fgCode && it.fgCode) t.fgCode = it.fgCode;
       if (!t.fgModel && it.fgModel) t.fgModel = it.fgModel;
       if (!t.pdNumber && it.pdNumber) t.pdNumber = it.pdNumber;
@@ -740,7 +888,7 @@
     let taskValues = Array.from(tasks.values());
     if (statusFilter) taskValues = taskValues.filter((t) => t.status === statusFilter);
 
-    const list = taskValues.sort((a, b) => String(b.last).localeCompare(String(a.last)));
+    const list = taskValues.sort((a, b) => new Date(b.last) - new Date(a.last));
     dashTaskList = list;
 
     if (!list.length) { $("dashList").innerHTML = `<div class="msg">ไม่พบข้อมูล</div>`; return; }
@@ -751,7 +899,7 @@
           <div>
             <div class="code">${esc(t.fgCode || t.fgModel || t.pdNumber || "(ไม่ระบุงาน)")}</div>
             <div class="model">${esc(t.fgModel)}${t.pdNumber ? " · PD " + esc(t.pdNumber) : ""}</div>
-            <div class="task-meta">อัปเดตล่าสุด ${esc(t.last)}</div>
+            <div class="task-meta">อัปเดตล่าสุด ${esc(fmtDateTime(t.last))}</div>
             ${(t.engineer || t.fixDate) ? `<div class="task-meta">${t.engineer ? "เอ็นจิเนียร์: " + esc(t.engineer) : ""}${t.engineer && t.fixDate ? " · " : ""}${t.fixDate ? "วันที่แก้ไข: " + esc(t.fixDate) : ""}</div>` : ""}
             ${t.status ? `<div style="margin-top:6px;">${statusBadge(t.status)}</div>` : ""}
           </div>
@@ -768,7 +916,7 @@
                 ${editBadge(it.editType)}
               </div>
               <div class="r2">${esc(it.rmCode)} · จำนวน ${esc(it.qty)}${it.oldCode ? " · รหัสเดิม " + esc(it.oldCode) : ""}</div>
-              <div class="r2">ผู้แจ้ง ${esc(it.reporter)} · วันที่นำไปใช้ ${esc(it.useDate)}${it.note ? " · " + esc(it.note) : ""}</div>
+              <div class="r2">ผู้แจ้ง ${esc(it.reporter)}${it.useDate ? " · วันที่นำไปใช้ " + esc(it.useDate) : ""}${it.note ? " · " + esc(it.note) : ""}</div>
               ${it.photo ? `<a class="photo-link" href="${esc(it.photo)}" target="_blank" rel="noopener">ดูรูปถ่าย</a>` : ""}
             </div>`).join("")}
         </div>
@@ -818,15 +966,15 @@
   let impWorkbook = null;
   let impRows = []; // แถวที่ parse แล้ว ยังไม่รวมค่าที่ตั้งร่วมกัน (ผู้แจ้ง/หมายเหตุ)
 
+  // ไฟล์ "แจ้งแก้ไข BOM by PN": rmcode / Item Number = รหัสเดิมที่อยู่ใน BOM
+  //                           แก้ไขBOM-PD / New Item = รหัสที่เอาไปใช้แทน  (ชื่อวัตถุดิบ ดึงจาก Released products ตามรหัสนี้)
   const IMP_COL_ALIASES = {
     pdNumber: ["pdnum", "pd number", "เลข pd"],
-    fgCode: ["fgcod", "fgcode", "รหัสงาน fg"],
-    fgModel: ["fgmodel", "ชื่องาน fg"],
-    rmCode: ["rmcode", "รหัสที่เอาไปใช้"],
-    rmName: ["rmname", "ชื่อวัตถุดิบ"],
-    qty: ["rmqty", "จำนวนที่ใช้"],
-    oldCode: ["แก้ไขbom-pd", "รหัสเดิม", "รหัสเดิม (ถ้าทราบ)"],
-    status: ["สถานะ", "status", "สถานะของงาน"],
+    fgCode: ["fgcod", "fgcode", "fg code", "รหัสงาน fg"],
+    fgModel: ["fgmodel", "fg model", "ชื่องาน fg"],
+    itemCode: ["rmcode", "item number"],
+    newCode: ["แก้ไขbom-pd", "new item"],
+    qty: ["rmqty", "qty"],
   };
 
   function normHeader(h) { return String(h ?? "").trim().toLowerCase(); }
@@ -899,16 +1047,17 @@
 
     impRows = rows.slice(1)
       .filter((r) => r.some((v) => String(v ?? "").trim() !== ""))
-      .map((r) => ({
-        pdNumber: col.pdNumber >= 0 ? String(r[col.pdNumber] ?? "").trim() : "",
-        fgCode: col.fgCode >= 0 ? String(r[col.fgCode] ?? "").trim() : "",
-        fgModel: col.fgModel >= 0 ? String(r[col.fgModel] ?? "").trim() : "",
-        rmCode: col.rmCode >= 0 ? String(r[col.rmCode] ?? "").trim() : "",
-        rmName: col.rmName >= 0 ? String(r[col.rmName] ?? "").trim() : "",
-        qty: col.qty >= 0 ? Math.abs(Number(r[col.qty]) || 0) : 0,
-        oldCode: col.oldCode >= 0 ? String(r[col.oldCode] ?? "").trim() : "",
-        statusRaw: col.status >= 0 ? String(r[col.status] ?? "").trim() : "",
-      }));
+      .map((r) => {
+        const cell = (k) => (col[k] >= 0 ? String(r[col[k]] ?? "").trim() : "");
+        const rmCode = cell("newCode");
+        const rec = rmCode ? rmByItem.get(rmCode.toUpperCase()) : null;
+        return {
+          pdNumber: cell("pdNumber"), fgCode: cell("fgCode"), fgModel: cell("fgModel"),
+          rmCode, rmName: rec ? rec.productName || "" : "",
+          qty: col.qty >= 0 ? Math.abs(Number(r[col.qty]) || 0) : 0,
+          oldCode: cell("itemCode"),
+        };
+      });
 
     const missing = Object.keys(col).filter((k) => col[k] < 0);
     $("impColWarn").textContent = missing.length
@@ -965,13 +1114,17 @@
         reporter, status: IMP_FIXED_STATUS,
         fgCode: r.fgCode, pdNumber: r.pdNumber, fgModel: r.fgModel,
         rmCode: r.rmCode, productName: r.rmName, qty: r.qty,
-        oldCode: r.oldCode, editType: "", useDate: "", note,
+        oldCode: r.oldCode, note,
+      }))
+      .map((r) => ({
+        reporter: r.reporter, status: r.status, fg_code: r.fgCode, pd_number: r.pdNumber, fg_model: r.fgModel,
+        rm_code: r.rmCode, rm_name: r.productName, qty: r.qty, old_code: r.oldCode, note: r.note,
       }));
     const skippedUpfront = impRows.length - rows.length;
 
     if (!rows.length) {
       $("impMsg").className = "msg err";
-      $("impMsg").textContent = "ไม่มีแถวที่ข้อมูลครบพอจะนำเข้า (ต้องมีรหัสงาน/เลข PD/ชื่องาน FG อย่างน้อย 1 อย่าง, รหัสวัตถุดิบหรือชื่อวัตถุดิบ, และจำนวนมากกว่า 0)";
+      $("impMsg").textContent = "ไม่มีแถวที่ข้อมูลครบพอจะนำเข้า (ต้องมีรหัสงาน/เลข PD/ชื่องาน FG อย่างน้อย 1 อย่าง, รหัสที่เอาไปใช้ (New Item), และจำนวนมากกว่า 0)";
       $("impMsg").hidden = false;
       return;
     }
@@ -980,11 +1133,11 @@
     btn.disabled = true; btn.textContent = "กำลังนำเข้า…";
     $("impMsg").hidden = true;
     try {
-      const d = await post({ action: "bulkImport", rows });
-      if (!d.ok) throw new Error(d.error || "นำเข้าไม่สำเร็จ");
+      if (!token) throw new Error("กรุณาเข้าสู่ระบบก่อนนำเข้าข้อมูล");
+      const d = await rpc("bomc_import", { p_rows: rows }, true);
       $("impMsg").className = "msg ok";
       $("impMsg").textContent = `นำเข้าสำเร็จ ${d.imported} แถว`
-        + (d.duplicate ? ` (ข้าม ${d.duplicate} แถวที่ซ้ำกับข้อมูลเดิมในชีต)` : "")
+        + (d.duplicate ? ` (ข้าม ${d.duplicate} แถวที่ซ้ำกับข้อมูลเดิมในระบบ)` : "")
         + (d.skipped ? ` (เซิร์ฟเวอร์ข้าม ${d.skipped} แถวที่ข้อมูลไม่ครบ)` : "")
         + (skippedUpfront ? ` (ไม่ได้ส่ง ${skippedUpfront} แถวตั้งแต่ต้นเพราะข้อมูลไม่ครบ)` : "");
       $("impMsg").hidden = false;
@@ -1000,6 +1153,43 @@
       $("impMsg").className = "msg err"; $("impMsg").textContent = err.message; $("impMsg").hidden = false;
     }
     btn.disabled = false; btn.textContent = "นำเข้าข้อมูล";
+  });
+
+  // ---------- เข้าสู่ระบบสำหรับนำเข้า Excel ----------
+  function renderImpAuth() {
+    const on = !!token;
+    $("impLoginCard").hidden = on;
+    $("impUserBar").hidden = !on;
+    $("impFileCard").hidden = !on;
+    if (!on) { $("impSettingsCard").hidden = true; $("impPreviewCard").hidden = true; }
+    else if (impRows.length) { $("impSettingsCard").hidden = false; $("impPreviewCard").hidden = false; }
+    $("impUserText").textContent = on ? "เข้าสู่ระบบแล้ว: " + (tokenEmail() || "-") : "";
+  }
+
+  $("impLoginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("impLoginBtn"), m = $("impLoginMsg");
+    btn.disabled = true; btn.textContent = "กำลังตรวจสอบ…"; m.hidden = true;
+    try {
+      const { ok, data } = await authCall("token?grant_type=password",
+        { email: $("impEmail").value.trim(), password: $("impPassword").value });
+      if (!ok) throw new Error("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+      saveSession(data);
+      $("impPassword").value = "";
+      renderImpAuth();
+    } catch (err) {
+      m.textContent = "เข้าสู่ระบบไม่ได้: " + err.message; m.hidden = false;
+    }
+    btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
+  });
+
+  $("impLogout").addEventListener("click", () => {
+    const old = token;
+    clearSession();
+    renderImpAuth();
+    if (old) fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${old}` },
+    }).catch(() => {});
   });
 
   // ---------- Scanner (ใช้ร่วมกันทุกช่อง) ----------
@@ -1042,6 +1232,8 @@
   $("scanCancel").addEventListener("click", closeScanner);
 
   // ---------- เริ่มต้น ----------
+  fillAllOptions();
+  renderImpAuth();
   loadInit();
 </script>
 </body>
