@@ -66,9 +66,9 @@ td input.v{width:7em}
   <h2>3) ตำแหน่งรถล่าสุดที่ได้รับ</h2>
   <div class="scroll"><table><thead><tr><th>ทะเบียน</th><th>ระบบ GPS</th><th>เวลากล่อง GPS</th><th>ความเร็ว</th><th>สถานะ</th><th>พิกัด</th></tr></thead><tbody id="gp"></tbody></table></div>
 </main>
-<script src="config.js?v=21"></script>
-<script src="api.js?v=21"></script>
-<script src="auth.js?v=21"></script>
+<script src="config.js?v=22"></script>
+<script src="api.js?v=22"></script>
+<script src="auth.js?v=22"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -108,7 +108,7 @@ async function load() {
     const v = $('cf').querySelector(`input[data-k="${b.dataset.s}"]`).value;
     await Auth.rpc('eta_config_set', { p_key: b.dataset.s, p_value: v }); say('บันทึกค่า ' + b.dataset.s + ' แล้ว', 'ok');
   }));
-  $('cfgHint').textContent = admin ? 'แก้ค่าแล้วกด “บันทึก” ที่แถวนั้น มีผลกับ ETA ทันทีในการโหลดครั้งถัดไป' : 'ดูได้อย่างเดียว (เฉพาะ admin แก้ค่าได้)';
+  $('cfgHint').textContent = admin ? 'แก้ค่าแล้วกด “บันทึก” ที่แถวนั้น มีผลกับ ETA ทันทีในการโหลดครั้งถัดไป' : 'ดูได้อย่างเดียว (สิทธิ์ edit / admin แก้ค่าได้)';
   $('gp').innerHTML = gps.map(g => `<tr><td>${esc(g.plate)}</td><td>${esc(g.source || '-')}</td><td>${esc(g.time)}</td><td>${g.speed}</td><td>${esc(g.status)}</td><td><a class="nav" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${g.lat},${g.lng}">${(+g.lat).toFixed(5)}, ${(+g.lng).toFixed(5)}</a></td></tr>`).join('') || '<tr><td colspan="6" class="muted">ยังไม่มีข้อมูล GPS (ส่งจาก Excel ด้วยปุ่ม ส่ง GPS)</td></tr>';
 }
 
@@ -124,7 +124,7 @@ $('padd').onclick = () => run(async () => {
   if (!SB.ON) return say('โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js', 'err');
   if (!Auth.get()) await Auth.login();
   Auth.badge($('userBox'));
-  admin = Auth.isAdmin(); edit = Auth.canEdit();
+  edit = Auth.canEdit(); admin = edit;          // s21 : ตั้งค่า ETA = สิทธิ์ edit ขึ้นไป
   $('addRow').hidden = !edit;
   run(load);
 })();

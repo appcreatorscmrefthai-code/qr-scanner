@@ -80,9 +80,9 @@ footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:
   <div class="legend"><span style="--c:var(--green)">จบงานครบ</span><span style="--c:var(--amber)">กำลังดำเนินการ / ยังไม่ถึงวัน</span><span style="--c:var(--red)">ผ่านวันแล้วยังจบงานไม่ครบ</span><span style="--c:#ffb3bd">ยกเลิก (กดดูรายการได้)</span></div>
   <div id="updated"></div>
 </footer>
-<script src="config.js?v=21"></script>
-<script src="api.js?v=21"></script>
-<script src="auth.js?v=21"></script>
+<script src="config.js?v=22"></script>
+<script src="api.js?v=22"></script>
+<script src="auth.js?v=22"></script>
 <script>
 const CFG = window.APP_CONFIG || {}, DEMO = !SB.ON;
 const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -102,7 +102,7 @@ async function load() {
     let d;
     if (DEMO) d = { ok: true, days: month === '2026-09' ? { '2026-09-29': { total: 4, done: 4 }, '2026-09-30': { total: 6, done: 1, canceled: 1 }, '2026-09-25': { total: 0, done: 0, canceled: 2 } } : {} };
     else d = await Auth.getJson({ action: 'month', month });
-    Auth.badge($('userBox')); if ($('backupLink')) $('backupLink').hidden = !Auth.canEdit();
+    Auth.badge($('userBox')); if ($('backupLink')) $('backupLink').hidden = false;      // s21 : viewer ดูได้ทุกหน้า (ดาวน์โหลด Backup เฉพาะ edit ขึ้นไป)
     if (my !== seq) return;
     if (!d.ok) throw new Error(d.error);
     days = d.days || {};

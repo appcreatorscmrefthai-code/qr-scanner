@@ -17,7 +17,7 @@ window.Auth = (function () {
   }
   const canEdit = () => { const a = get(); return !!a && (a.role === 'edit' || a.role === 'admin'); };
   const isAdmin = () => { const a = get(); return !!a && a.role === 'admin'; };
-  const ROLE_TH = { admin: 'ผู้ดูแล (ทำได้ทุกอย่าง)', edit: 'แก้ไขได้', viewer: 'ดูอย่างเดียว' };
+  const ROLE_TH = { admin: 'ผู้ดูแล (ทำได้ทุกอย่าง)', edit: 'แก้ไขได้', viewer: 'ดูอย่างเดียว' };   // สิทธิ์ : viewer ดู+พิมพ์ QR / edit + สร้าง แก้ ลบรูป ตั้งค่า ETA ส่งจาก Excel ดึง Backup / admin + ยกเลิก กู้คืน ลบงาน
 
   // เก็บผลการเข้าสู่ระบบ + อ่านชื่อและสิทธิ์จากตาราง profiles
   async function store(r) {
@@ -155,7 +155,7 @@ window.Auth = (function () {
     };
   }
 
-  // ลบรูปในที่เก็บรูป (เฉพาะ admin) paths = รายการ path ของรูป
+  // ลบรูปในที่เก็บรูป (สิทธิ์ edit / admin) paths = รายการ path ของรูป
   async function removePhotos(paths) {
     const list = [...new Set((paths || []).filter(Boolean))];
     if (!list.length || DEMO) return;

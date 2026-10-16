@@ -5,7 +5,7 @@ window.SB = (function () {
   const CFG = window.APP_CONFIG || {};
   const URL0 = String(CFG.SUPABASE_URL || '').replace(/\/+$/, ''), KEY = CFG.SUPABASE_KEY || '';
   const ON = !!(URL0 && KEY);
-  const VER = '2026.10.16-s20';
+  const VER = '2026.10.16-s21';
 
   // เรียก API หนึ่งครั้ง : สำเร็จคืนข้อมูล, ไม่สำเร็จ throw Error (e.status = รหัส HTTP, e.server = true เมื่อเซิร์ฟเวอร์ปฏิเสธเอง)
   async function call(path, opt) {

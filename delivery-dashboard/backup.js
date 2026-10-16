@@ -269,7 +269,14 @@
     if (!SB.ON) return say('โหมดตัวอย่าง: ยังไม่ได้ใส่ SUPABASE_URL ใน config.js', 'err');
     if (!Auth.get()) await Auth.login();
     Auth.badge($('userBox'));
-    loadStatus(); loadFiles();
+    loadStatus();
+    if (!Auth.canEdit()) {                                          // s21 : viewer ดูสถานะได้อย่างเดียว ดึง Backup ได้ตั้งแต่สิทธิ์ edit
+      const no = 'บัญชีนี้ดูได้อย่างเดียว : ดาวน์โหลด / สร้างไฟล์ Backup ได้เฉพาะสิทธิ์ edit / admin';
+      $('dlLatest').disabled = true; $('gen').disabled = true;
+      $('files').className = 'muted'; $('files').textContent = no; $('latestInfo').textContent = no;
+      return;
+    }
+    loadFiles();
     setTimeout(() => loadXlsx().catch(() => { }), 2500);           // โหลดไลบรารีไว้ก่อน ให้ปุ่มสร้างไฟล์เร็วขึ้น
   })();
 })();

@@ -3,7 +3,8 @@ Option Explicit
 
 ' ============================================================================
 '  Delivery Tracking : ดึงแผนส่งของ (export-tasks) + ใบจองรถ (1Template_TB) ลงชีต Plan
-'  รุ่น 2026.10.16-e  (คอลัมน์ E = Type จาก export-tasks : oversea = งานต่างประเทศ / domestic = ในประเทศ
+'  รุ่น 2026.10.16-f  (ใบจองรถ 1Template_TB คอลัมน์ เวลานัด 1/2/3 -> Arrival Time 1/2/3 คอลัมน์ H-J ของชีต Plan)
+'  รุ่น e : (คอลัมน์ E = Type จาก export-tasks : oversea = งานต่างประเทศ / domestic = ในประเทศ
 '                     คอลัมน์ในชีต Plan ตั้งแต่ Transport เลื่อนขวา 1 คอลัมน์ / โหมดอัตโนมัติรับช่วงวันที่ B1-C1)
 '  รุ่น d : หยิบไฟล์ตามชีต Config ไม่ต้องเลือกไฟล์ / โหมดอัตโนมัติให้บอต Python
 '  รุ่น c : เติม Task Code อัตโนมัติ / งานต่างประเทศ / รอบเดียว / Task Status = Used
@@ -23,6 +24,7 @@ Option Explicit
 '    5) จัดข้อมูล -> ชีต Calendar Plan เหลือ 6 คอลัมน์ : Client Name | Date | Transport | Schedule | Detail | Type
 '       Detail = ข้อความระหว่าง [ติ๊กถูกเขียว] กับ [สามเหลี่ยม] / [หัวใจม่วง] (หลายข้อความคั่นด้วย ", ")
 '    6) วางต่อท้ายชีต Plan : A->D, B->B, C->F, D->G, E->C, F->E  และเติม K-Y จากชีต Transport Booking
+'       H-J Arrival Time 1-3 = คอลัมน์ เวลานัด 1-3 ของใบจองรถ (ว่าง / - = ไม่เติม ; งานต่างประเทศใช้กติกาข้อ 7 แทน)
 '       (key = Client Name เทียบกับคอลัมน์ "อ้างอิง LN" ของใบจองรถ, จับคู่คอลัมน์ตามชื่อหัวตาราง)
 '    7) เติมข้อมูลเพิ่ม
 '       A  Task Code   = D + ปปปปดดวว + "-" + ลำดับ ต่อจากเลขล่าสุดบนเว็บ (และเลขที่มีในชีต Plan / Plan_Backup)
@@ -50,6 +52,7 @@ Private Const SKIP_CLIENT As String = "D/N NO"     ' Client Name ที่ขึ้นต้นด้วยค
 Private Const TB_KEY_HEAD As String = "อ้างอิง LN"
 Private Const TB_NOTE_HEAD As String = "หมายเหตุ"
 Private Const TB_CANCEL_WORD As String = "ยกเลิก"
+Private Const TB_ARR_HEAD As String = "เวลานัด"     ' หัวตารางใบจองรถ : เวลานัด 1 / เวลานัด 2 / เวลานัด 3
 Private Const LOOKUP_FIRST As Long = 11    ' คอลัมน์ K ของชีต Plan
 Private Const LOOKUP_LAST As Long = 25     ' คอลัมน์ Y ของชีต Plan
 Private Const PLAN_LASTCOL As Long = 27    ' คอลัมน์ AA
@@ -97,6 +100,7 @@ Public Sub DP_ImportCalendar()
     Dim rangeText As String
     Dim vType As String, vMin As Long, isIntl() As Boolean, nIntl As Long, nUnk As Long, sUnk As String, nNoSch As Long, sNoSch As String
     Dim codeMsg As String
+    Dim arrMap(1 To 3) As Long, k As Long, av As Variant
 
     ' ---- ตรวจชีต Plan และช่วงวันที่ B1:C1 ----
     Set wsPlan = FindSheet(PLAN_SHEET)
@@ -192,6 +196,13 @@ Public Sub DP_ImportCalendar()
         colMap(c) = FindCol(tb, tbHdr, CStr(wsPlan.Cells(hdr, c).Value))
         If colMap(c) = 0 Then missHead = missHead & vbCrLf & "  " & ColLetter(c) & " : " & CStr(wsPlan.Cells(hdr, c).Value)
     Next c
+    ' เวลานัด 1-3 ของใบจองรถ -> Arrival Time 1-3 (ใบจองรถรุ่นเก่าที่ไม่มีคอลัมน์นี้ = ไม่เติม และแจ้งในข้อความสรุป)
+    For k = 1 To 3
+        arrMap(k) = FindCol(tb, tbHdr, TB_ARR_HEAD & " " & CStr(k))
+        If arrMap(k) = 0 Then arrMap(k) = FindCol(tb, tbHdr, TB_ARR_HEAD & CStr(k))
+        If arrMap(k) = 0 Then arrMap(k) = FindCol(tb, tbHdr, CStr(wsPlan.Cells(hdr, COL_ARR1 + k - 1).Value))
+        If arrMap(k) = 0 Then missHead = missHead & vbCrLf & "  " & ColLetter(COL_ARR1 + k - 1) & " : " & TB_ARR_HEAD & " " & CStr(k)
+    Next k
 
     Set dAct = CreateObject("Scripting.Dictionary")   ' key -> แถวล่าสุดที่ไม่ถูกยกเลิก
     Set dCnt = CreateObject("Scripting.Dictionary")   ' key -> จำนวนใบจองที่ไม่ถูกยกเลิก
@@ -233,6 +244,12 @@ Public Sub DP_ImportCalendar()
             For c = LOOKUP_FIRST To LOOKUP_LAST
                 If colMap(c) > 0 Then outP(i, c) = SafeStr(tb(r, colMap(c)))
             Next c
+            For k = 1 To 3
+                If arrMap(k) > 0 Then
+                    av = ArrTime(tb(r, arrMap(k)))
+                    If Not IsEmpty(av) Then outP(i, COL_ARR1 + k - 1) = av
+                End If
+            Next k
             If dCnt(key) > 1 Then
                 nMulti = nMulti + 1
                 If nMulti <= LIST_MAX Then sMulti = sMulti & vbCrLf & "  " & CStr(cal(i + 1, 1)) & " (" & CStr(dCnt(key)) & " ใบ)"
@@ -696,6 +713,24 @@ Bad:
 End Function
 
 ' เวลา "08:00" / "8.30" / "08.30 น." -> ค่าเวลา  (ว่าง = ว่าง, อ่านไม่ได้ = ข้อความเดิม)
+' เวลานัดจากใบจองรถ : ว่าง / - = Empty ; 8.30 / 8.30 น. / 08:30 / ค่าเวลา = เวลา ; ข้อความอื่นคงไว้ตามเดิม
+Private Function ArrTime(ByVal v As Variant) As Variant
+    Dim s As String, x As Double, h As Long, m As Long
+    If IsError(v) Or IsEmpty(v) Then Exit Function
+    s = Trim$(Replace(SafeStr(v), ChrW(160), " "))
+    If Len(s) = 0 Or s = "-" Then Exit Function
+    ' พิมพ์ 8.30 / 13.30 แล้ว Excel เก็บเป็นตัวเลข 8.3 / 13.3 = ชั่วโมง.นาที
+    If VarType(v) <> vbString And VarType(v) <> vbDate And IsNumeric(v) Then
+        x = CDbl(v)
+        If x >= 1 And x < 24 Then
+            h = Int(x)
+            m = CLng(Round((x - h) * 100, 0))
+            If m < 60 Then ArrTime = CDbl(TimeSerial(h, m, 0)): Exit Function
+        End If
+    End If
+    ArrTime = HmValue(v)
+End Function
+
 Private Function HmValue(ByVal v As Variant) As Variant
     Dim s As String, p() As String
     If IsError(v) Or IsEmpty(v) Then HmValue = Empty: Exit Function

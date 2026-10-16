@@ -5,6 +5,7 @@
   // ความเร็วบนมือถือ: ย่อรูปก่อนส่ง, เริ่มส่งรูปทันทีที่เลือก (ไม่รอกดปุ่ม), ส่งพร้อมกันหลายรูป
   const MAX_SIDE = 1024, QUALITY = 0.68, MB = 1024 * 1024, BATCH = 1, PARALLEL = 4;
   const taskKey = '';          // ลิงก์ QR ไม่ใช้รหัสลับแล้ว (คงพารามิเตอร์ไว้ให้ฟังก์ชันฝั่งฐานข้อมูลรุ่นเดียวกัน)
+  const FORM_KIND = /(^|\/)(pickup|qa)(\.html)?$/i.test(location.pathname) ? 'pickup' : 'driver';   // WH / QA เปิดได้ถึงวันงาน+1 ; คนขับถึงวันงาน+2
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -22,7 +23,10 @@
   async function apiGet(q) {
     if (DEMO) { await sleep(250); return { ok: true, task: demoTask(q.code) }; }
     try {
-      const d = await SB.rpc('form_task', { p_code: q.code, p_key: taskKey });
+      // ฟอร์ม WH / QA เปิดได้ถึงวันงาน+1 ; ฟอร์มคนขับถึงวันงาน+2 (ฐานข้อมูลรุ่นก่อน s21 ไม่มี p_form : เรียกแบบเดิม)
+      let d;
+      try { d = await SB.rpc('form_task', { p_code: q.code, p_key: taskKey, p_form: FORM_KIND }); }
+      catch (e) { if (!/PGRST202|form_task\(|function/i.test((e && e.message) || '')) throw e; d = await SB.rpc('form_task', { p_code: q.code, p_key: taskKey }); }
       showVer();
       return { ok: true, task: SB.full(d.plan, d.pickup, d.road) };
     } catch (e) { return refused(e); }

@@ -393,9 +393,9 @@ dialog::backdrop{background:rgba(3,6,14,.72)}
   </symbol>
 </svg>
 
-<script src="config.js?v=21"></script>
-<script src="api.js?v=21"></script>
-<script src="auth.js?v=21"></script>
+<script src="config.js?v=22"></script>
+<script src="api.js?v=22"></script>
+<script src="auth.js?v=22"></script>
 <script src="viewer.js?v=18"></script>
 <script>
 const CFG = window.APP_CONFIG || {};
@@ -732,7 +732,7 @@ const photoUrl = new Map();
 // g = ชุดรูป (กดรูปแล้วเลื่อนดูรูปในชุดเดียวกันได้ ทุกสิทธิ์) ; cap = คำอธิบายชุด
 const thumbs = (ids, g, cap) => ids && ids.length ? `<div class="thumbs">${ids.map((id, i) => { const u = photoUrl.get(id);
   return `<div class="tb"><a data-p="${esc(id)}" data-vg="${esc(g || 'x')}" data-cap="${esc(cap || 'รูป')}" ${u ? `href="${esc(u.url)}"` : ''} target="_blank" rel="noopener"><img loading="lazy" alt="รูป" ${u ? `src="${esc(u.url)}"` : ''}></a>`
-    + (Auth.isAdmin() && !DEMO ? `<button type="button" class="phx" data-del="${esc(id)}" title="ลบรูปนี้ (เฉพาะผู้ดูแล)" aria-label="ลบรูปนี้">×</button>` : '') + `</div>`; }).join('')}</div>` : '';
+    + (Auth.canEdit() && !DEMO ? `<button type="button" class="phx" data-del="${esc(id)}" title="ลบรูปนี้ (สิทธิ์ edit / admin)" aria-label="ลบรูปนี้">×</button>` : '') + `</div>`; }).join('')}</div>` : '';
 // รูปส่งงานแยกฝ่าย : WH = คลังสินค้า (pickup.html), QA = ประกันคุณภาพ (qa.html)
 const deptRows = (t, d) => (t.pickupRows || []).filter(r => r.source !== 'GPS' && (r.dept || 'WH') === d);
 async function fillPhotos() {
@@ -912,7 +912,7 @@ function confirmTwice(btn, ask, run) {
   if (armBtn !== btn) { disarm(); armBtn = btn; btn.dataset.t = btn.textContent; btn.textContent = ask; btn.style.color = '#ff8a98'; armT = setTimeout(disarm, 6000); return; }
   disarm(); run();
 }
-const actErr = e => e.message === 'FORBIDDEN' ? 'เฉพาะผู้ดูแล (admin) เท่านั้น' : e.message === 'CANCELED' ? 'งานนี้ถูกยกเลิกแล้ว แก้ไขและลบไม่ได้ (กดกู้คืนงานก่อน)' : e.message;
+const actErr = e => e.message === 'FORBIDDEN' ? 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้' : e.message === 'CANCELED' ? 'งานนี้ถูกยกเลิกแล้ว แก้ไขและลบไม่ได้ (กดกู้คืนงานก่อน)' : e.message;
 
 /* ยกเลิกงาน / กู้คืนงาน (เฉพาะ admin) : ตั้ง Task Status = Canceled งานจะหายจากแผน ไปอยู่หน้ารายการยกเลิก */
 $('dlgCancel').onclick = () => {
@@ -930,7 +930,7 @@ $('dlgCancel').onclick = () => {
   });
 };
 
-/* ลบรูปทีละรูป (เฉพาะ admin) : กด × แล้วกดซ้ำเพื่อยืนยัน -> เอารูปออกจาก Log (บันทึกประวัติ) แล้วลบไฟล์ในที่เก็บรูป */
+/* ลบรูปทีละรูป (สิทธิ์ edit / admin) : กด × แล้วกดซ้ำเพื่อยืนยัน -> เอารูปออกจาก Log (บันทึกประวัติ) แล้วลบไฟล์ในที่เก็บรูป */
 $('dlgBody').addEventListener('click', e => {
   const b = e.target.closest('[data-del]'); if (!b) return;
   e.preventDefault();

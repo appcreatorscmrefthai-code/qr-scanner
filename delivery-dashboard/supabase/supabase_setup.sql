@@ -1,5 +1,5 @@
 -- =====================================================================
--- Delivery Tracking : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.16-s20)
+-- Delivery Tracking : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.16-s21)
 -- วิธีใช้ : Supabase > SQL Editor > New query > วางทั้งไฟล์นี้ > กด Run
 -- รันซ้ำได้ ข้อมูลเดิมไม่หาย (ใช้ตอนผมส่งรุ่นแก้ไขมาให้)
 -- =====================================================================
@@ -183,35 +183,57 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ตรวจสิทธิ์เปิดฟอร์มมือถือ : ลิงก์ QR ไม่ใช้รหัสลับแล้ว (สร้างงานใหม่ด้วย Task Code เดิมแล้วลิงก์เดิมยังใช้ได้)
--- ตัวกัน : งานต้องไม่ถูกยกเลิก และวันที่งานต้องอยู่ในช่วง วันนี้-3 ถึง วันนี้+1 (เวลาไทย) ; p_key ที่ส่งมาจาก QR รุ่นเก่าไม่ถูกใช้ตรวจ
-create or replace function public.form_window_ok(p_date date) returns boolean
-language sql stable as $$
-  select p_date between (now() at time zone 'Asia/Bangkok')::date - 3 and (now() at time zone 'Asia/Bangkok')::date + 1
+-- ตัวกัน : งานต้องไม่ถูกยกเลิก และวันนี้ (เวลาไทย) ต้องอยู่ในช่วงเปิดฟอร์ม ; p_key ที่ส่งมาจาก QR รุ่นเก่าไม่ถูกใช้ตรวจ
+-- s21 ช่วงเปิดฟอร์ม (ดูข้อมูลและส่งข้อมูล) : ก่อนวันงาน 1 วัน ถึง
+--     ฟอร์มคนขับทั่วไป / คนขับปทุมฯ (form = driver)          วันงาน + 2 วัน
+--     ฟอร์ม WH / QA / WH ต่างประเทศ (form = pickup, qa, wh_in) วันงาน + 1 วัน
+--   เลยช่วง = "งานนี้จบแล้ว" ไม่ให้เข้าหน้าข้อมูล ; ก่อนช่วง = "ยังไม่ถึงวันงาน"
+create or replace function public.form_days(p_form text) returns int
+language sql immutable as $$
+  select case when lower(coalesce(p_form, '')) in ('pickup', 'qa', 'wh', 'wh_in', 'wh_out') then 1 else 2 end
 $$;
 
-create or replace function public.task_check(p_code text, p_key text) returns public.plan
+-- ใช้กับที่เก็บรูป (ไม่รู้ว่าเป็นฟอร์มไหน) : ช่วงกว้างสุด ก่อนวันงาน 1 วัน ถึง วันงาน + 2 วัน (ส่งข้อมูลจริงตรวจตามฟอร์มใน task_check)
+drop function if exists public.form_window_ok(date);
+create or replace function public.form_window_ok(p_date date, p_days int default 2) returns boolean
+language sql stable as $$
+  select (now() at time zone 'Asia/Bangkok')::date between p_date - 1 and p_date + p_days
+$$;
+
+create or replace function public.task_check(p_code text, p_key text, p_form text) returns public.plan
 language plpgsql stable security definer set search_path = public as $$
-declare t public.plan;
+declare t public.plan; v_today date := (now() at time zone 'Asia/Bangkok')::date; v_days int := public.form_days(p_form);
 begin
   select * into t from public.plan where upper(task_code) = upper(btrim(coalesce(p_code, '')));
   if not found then raise exception 'ไม่พบงานนี้ กรุณาตรวจ Task Code หรือสแกน QR ใหม่'; end if;
   if public.is_canceled(t.status) then raise exception 'งานนี้ถูกยกเลิกแล้ว (%)', t.task_code; end if;
-  if not public.form_window_ok(t.date) then raise exception 'ลิงก์นี้ใช้ได้เฉพาะงานของวันนี้ (งานวันที่ %) กรุณาติดต่อผู้ประสานงาน', t.date; end if;
+  if v_today > t.date + v_days then
+    raise exception 'งานนี้จบแล้ว (งานวันที่ % ลิงก์นี้ใช้ได้ถึงวันที่ %)', to_char(t.date, 'DD/MM/YYYY'), to_char(t.date + v_days, 'DD/MM/YYYY');
+  end if;
+  if v_today < t.date - 1 then
+    raise exception 'ยังไม่ถึงวันงาน (งานวันที่ % เปิดลิงก์ได้ตั้งแต่วันที่ %)', to_char(t.date, 'DD/MM/YYYY'), to_char(t.date - 1, 'DD/MM/YYYY');
+  end if;
   return t;
 end $$;
+-- รุ่นเดิม (2 พารามิเตอร์) = ฟอร์มคนขับ
+create or replace function public.task_check(p_code text, p_key text) returns public.plan
+language sql stable security definer set search_path = public as $$ select public.task_check(p_code, p_key, 'driver') $$;
 
 -- ---------- 3. ฟอร์มมือถือ (ไม่ต้องเข้าสู่ระบบ ใช้รหัสลับจาก QR) ----------
-create or replace function public.form_task(p_code text, p_key text) returns jsonb
+-- p_form : driver = ฟอร์มคนขับ (ค่าเริ่มต้น) / pickup, qa = ฟอร์ม WH, QA (ช่วงเปิดต่างกัน ดู form_days)
+create or replace function public.form_task(p_code text, p_key text, p_form text) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare t public.plan;
 begin
-  t := public.task_check(p_code, p_key);
+  t := public.task_check(p_code, p_key, p_form);
   return jsonb_build_object(
     'plan', to_jsonb(t) - 'key',
     'pickup', (select coalesce(jsonb_agg(to_jsonb(l) order by l.id), '[]'::jsonb) from public.pickup_log l where l.task_code = t.task_code),
     'road',   (select coalesce(jsonb_agg(to_jsonb(l) order by l.id), '[]'::jsonb) from public.road_log l where l.task_code = t.task_code),
     'now', now());
 end $$;
+create or replace function public.form_task(p_code text, p_key text) returns jsonb
+language sql stable security definer set search_path = public as $$ select public.form_task(p_code, p_key, 'driver') $$;
 
 -- รายการรูปที่ส่งมา : รับเฉพาะรูปในโฟลเดอร์ของงานนี้ ไม่ซ้ำ ไม่เกินจำนวนสูงสุด
 drop function if exists public.photo_list(jsonb, text, int);
@@ -254,7 +276,7 @@ declare
   v_plate text; v_changed boolean; e text[]; ph text[]; pre text; v_last timestamptz; v_ref timestamptz;
   v_dept text; v_have int; v_pend boolean := coalesce((p->>'pending')::boolean, false);
 begin
-  t := public.task_check(p->>'taskCode', p->>'k');
+  t := public.task_check(p->>'taskCode', p->>'k', p->>'form');
   pre := t.task_code || '/';
   if (select count(*) from public.road_log where task_code = t.task_code) >= 300 or (select count(*) from public.pickup_log where task_code = t.task_code) >= 100 then
     raise exception 'ส่งข้อมูลของงานนี้ครบจำนวนสูงสุดแล้ว';
@@ -388,7 +410,7 @@ language plpgsql security definer set search_path = public as $$
 declare t public.plan; v_id bigint := (p->>'id')::bigint; pre text; cur text[]; add text[]; v_type text; v_stop int; v_ref timestamptz; v_last timestamptz;
   v_dept text; v_other int;
 begin
-  t := public.task_check(p->>'taskCode', p->>'k');
+  t := public.task_check(p->>'taskCode', p->>'k', p->>'form');
   pre := t.task_code || '/';
   if p->>'form' in ('pickup', 'qa') then
     select photos, dept into cur, v_dept from public.pickup_log where id = v_id and task_code = t.task_code for update;
@@ -670,10 +692,10 @@ grant usage on schema public to anon, authenticated;
 revoke all on public.plan, public.pickup_log, public.road_log, public.edit_log, public.profiles from anon, authenticated;
 grant select on public.plan, public.pickup_log, public.road_log, public.edit_log, public.profiles to authenticated;
 
-revoke all on function public.task_check(text, text), public.form_task(text, text), public.form_submit(jsonb), public.form_attach(jsonb),
+revoke all on function public.task_check(text, text), public.task_check(text, text, text), public.form_task(text, text, text), public.form_task(text, text), public.form_submit(jsonb), public.form_attach(jsonb),
   public.photo_path_ok(text), public.month_summary(text), public.plan_edit(text, jsonb), public.plan_sync(jsonb), public.plan_update(jsonb),
   public.is_member(), public.can_edit(), public.is_admin(), public.plan_delete(text), public.plan_cancel(text, boolean), public.handle_new_user() from public, anon, authenticated;
-grant execute on function public.form_task(text, text), public.form_submit(jsonb), public.form_attach(jsonb), public.photo_path_ok(text) to anon, authenticated;
+grant execute on function public.form_task(text, text), public.form_task(text, text, text), public.form_submit(jsonb), public.form_attach(jsonb), public.photo_path_ok(text) to anon, authenticated;
 grant execute on function public.month_summary(text), public.plan_edit(text, jsonb), public.plan_sync(jsonb), public.plan_update(jsonb), public.plan_delete(text), public.plan_cancel(text, boolean), public.is_member(), public.can_edit(), public.is_admin() to authenticated;
 
 -- ---------- 7. อัปเดต Dashboard ทันทีเมื่อข้อมูลเปลี่ยน (Realtime) ----------
@@ -698,7 +720,7 @@ create policy photos_upload on storage.objects for insert to anon, authenticated
   with check (bucket_id = 'photos' and public.photo_path_ok(name));
 drop policy if exists photos_delete on storage.objects;
 create policy photos_delete on storage.objects for delete to authenticated
-  using (bucket_id = 'photos' and public.is_admin());
+  using (bucket_id = 'photos' and public.can_edit());          -- s21 : สิทธิ์ edit ลบรูปทีละรูปได้ (ลบงานทั้งงานยังเป็น admin)
 drop policy if exists photos_read on storage.objects;
 create policy photos_read on storage.objects for select to authenticated
   using (bucket_id = 'photos' and public.is_member());
@@ -1223,7 +1245,7 @@ end $$;
 create or replace function public.eta_config_set(p_key text, p_value text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_admin() then raise exception 'FORBIDDEN'; end if;
+  if not public.can_edit() then raise exception 'FORBIDDEN'; end if;     -- s21 : ตั้งค่า ETA = สิทธิ์ edit ขึ้นไป
   if not exists (select 1 from public.eta_config where key = p_key) then raise exception 'BAD_REQUEST'; end if;
   update public.eta_config set value = left(btrim(coalesce(p_value, '')), 100) where key = p_key;
   return jsonb_build_object('ok', true);
@@ -1477,7 +1499,7 @@ revoke all on public.backup_state from public, anon, authenticated;
 create or replace function public.backup_export(p_from date default null) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 begin
-  if not public.is_member() then raise exception 'FORBIDDEN'; end if;
+  if not public.can_edit() then raise exception 'FORBIDDEN'; end if;     -- s21 : ดึง Backup = สิทธิ์ edit ขึ้นไป
   return jsonb_build_object(
     'now', now(),
     'plan', (select coalesce(jsonb_agg((to_jsonb(t) - 'key' - 'created_at' - 'updated_at' - 'date') || jsonb_build_object('date', to_char(t.date, 'YYYY-MM-DD'),
@@ -1523,7 +1545,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('backups', 'backups', false, 52428800, array['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'])
 on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 drop policy if exists backups_read on storage.objects;
-create policy backups_read on storage.objects for select to authenticated using (bucket_id = 'backups' and public.is_member());
+create policy backups_read on storage.objects for select to authenticated using (bucket_id = 'backups' and public.can_edit());   -- s21 : ดึง Backup = สิทธิ์ edit ขึ้นไป
 drop policy if exists backups_insert on storage.objects;
 create policy backups_insert on storage.objects for insert to authenticated with check (bucket_id = 'backups' and public.can_edit());
 drop policy if exists backups_update on storage.objects;
@@ -1630,12 +1652,12 @@ drop policy if exists photos_form_read on storage.objects;
 create policy photos_form_read on storage.objects for select to anon
   using (bucket_id = 'photos' and public.photo_view_ok(name));
 
--- ลบรูปทีละรูปจาก Popup (เฉพาะ admin) : เอารูปออกจาก Log แล้วหน้าเว็บลบไฟล์ในที่เก็บรูปต่อ บันทึกประวัติลง edit_log
+-- ลบรูปทีละรูปจาก Popup (s21 : สิทธิ์ edit ขึ้นไป) : เอารูปออกจาก Log แล้วหน้าเว็บลบไฟล์ในที่เก็บรูปต่อ บันทึกประวัติลง edit_log
 create or replace function public.photo_remove(p_code text, p_path text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_who text; n int := 0; m int := 0; v_where text := '';
 begin
-  if not public.is_admin() then raise exception 'FORBIDDEN'; end if;
+  if not public.can_edit() then raise exception 'FORBIDDEN'; end if;     -- s21 : ลบรูปทีละรูป = สิทธิ์ edit ขึ้นไป
   select coalesce(nullif(name, ''), email) into v_who from public.profiles where user_id = auth.uid();
   select string_agg(distinct w, ', ') into v_where from (
     select 'รูปจาก ' || dept as w from public.pickup_log where task_code = p_code and p_path = any(photos)
