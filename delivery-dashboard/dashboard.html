@@ -207,8 +207,8 @@ dialog::backdrop{background:rgba(3,6,14,.72)}
 .ef{display:grid;grid-template-columns:repeat(2,1fr);gap:.6em 1em}
 .ef label{display:flex;flex-direction:column;gap:.2em;color:var(--muted);font-size:.9em;min-width:0}
 .ef label.wide{grid-column:1 / -1}
-.ef input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:.4em .6em;min-width:0;color-scheme:dark}
-.ef input:focus-visible{outline:2px solid var(--departed)}
+.ef input,.ef select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:.4em .6em;min-width:0;color-scheme:dark}
+.ef input:focus-visible,.ef select:focus-visible{outline:2px solid var(--departed)}
 .ef h3{grid-column:1 / -1;margin:.6em 0 0;font-size:1em}
 .emsg{color:var(--late);margin-top:.6em}
 .db{padding:14px 18px 20px}
@@ -393,9 +393,9 @@ dialog::backdrop{background:rgba(3,6,14,.72)}
   </symbol>
 </svg>
 
-<script src="config.js?v=18"></script>
-<script src="api.js?v=18"></script>
-<script src="auth.js?v=18"></script>
+<script src="config.js?v=21"></script>
+<script src="api.js?v=21"></script>
+<script src="auth.js?v=21"></script>
 <script src="viewer.js?v=18"></script>
 <script>
 const CFG = window.APP_CONFIG || {};
@@ -660,7 +660,8 @@ function render() {
           <div class="stip"><b>แผนที่จุดที่ ${k + 1} :</b>${mapHtml(sp.map)}<b style="margin-top:.4em">ชื่อ-เบอร์โทรผู้รับ จุดที่ ${k + 1} :</b>${esc(sp.receiver || '-')}</div></li>`;
       }).join('') + (x.rt ? `<li class="${cls(x.ns)}" data-code="${esc(t.taskCode)}"><span class="num">${x.done[x.ns] ? '✓' : '↩'}</span><b></b>
           <span class="nm">กลับ ${esc(CFG.ORIGIN || 'ต้นทาง')} (ไป-กลับ)</span><span class="acts">${x.done[x.ns] ? `<span class="act">ถึง ${hhmm(x.done[x.ns])}</span>` : ''}${phBtn(t, 0, 'รถกลับถึง SCM')}</span></li>` : '');
-      const chips = [t.taskCode, t.client, t.round, t.vehicleType, t.plate].filter(Boolean).map(c => `<span class="chip${x.intl && c === t.vehicleType ? ' intl' : ''}"${x.intl && c === t.vehicleType ? ' title="งานต่างประเทศ : ตรวจเฉพาะรถเข้า-ออก"' : ''}>${x.intl && c === t.vehicleType ? '🌐 ' : ''}${esc(c)}</span>`).join('')
+      const ivt = x.intl ? (t.vehicleType && SB.intlKind(t.vehicleType) ? t.vehicleType : x.intl.label) : '';      // งานต่างประเทศ : ชิปประเภทรถ (หรือ "ต่างประเทศ" ถ้าประเภทรถไม่ระบุชนิด)
+      const chips = [t.taskCode, t.client, t.round, x.intl ? ivt : t.vehicleType, t.plate].filter(Boolean).map(c => `<span class="chip${x.intl && c === ivt ? ' intl' : ''}"${x.intl && c === ivt ? ' title="งานต่างประเทศ : ตรวจเฉพาะรถเข้า-ออก"' : ''}>${x.intl && c === ivt ? '🌐 ' : ''}${esc(c)}</span>`).join('')
         + (deptRows(t, 'WH').length ? ' <span class="chip wh" title="คลังสินค้า (WH) อัปโหลดรูปแล้ว">📦 รูปจาก WH</span>' : '')
         + (deptRows(t, 'QA').length ? ' <span class="chip qa" title="ประกันคุณภาพ (QA) อัปโหลดรูปแล้ว">🔍 รูปจาก QA</span>' : '');
       const flagTxt = showCx ? 'CANCELED' : x.flag === 'delay' ? 'DELAY' : x.flag === 'follow' ? 'FOLLOW' : '';
@@ -709,7 +710,7 @@ function tipHtml(t, x) {
   return `<div><b>รถขนส่ง :</b> ${esc(t.transport || '-')}</div>
     <div><b>ชื่อบริษัทขนส่ง :</b> ${esc(t.company || '-')}</div>
     ${x.src ? `<div><b>สถานะล่าสุดมาจาก :</b> ${x.src === 'GPS' ? 'GPS (อัตโนมัติ)' : x.intl ? 'WH บันทึก (ฟอร์มอัปโหลดรูป WH)' : 'ผู้จัดส่งกรอกเอง'}</div>` : ''}
-    <div><b>ประเภทรถ / ทะเบียน :</b> ${esc(t.vehicleType || '-')} / ${esc(t.plate || '-')}</div>
+    <div><b>Type / ประเภทรถ / ทะเบียน :</b> ${esc(jobTh(t))} / ${esc(t.vehicleType || '-')} / ${esc(t.plate || '-')}</div>
     ${x.intl ? `<div><b>งานต่างประเทศ :</b> ตรวจเฉพาะรถเข้า-ออก (WH บันทึก) · เตือน Follow เมื่ออยู่ SCM เกิน ${durTh(x.intl.min)}</div>` : ''}
     <div><b>ชื่อผู้ขับ :</b> ${esc(t.driver || '-')}</div>
     <div><b>เบอร์โทรผู้ขับ :</b> ${esc(t.phone || '-')}</div>
@@ -776,6 +777,7 @@ function openDetail(code) {
         <br><span style="color:var(--muted)">แผนที่:</span> ${mapHtml(sp.map)} <span style="color:var(--muted)">· ผู้รับ:</span> ${esc(sp.receiver || '-')}</dd>`).join('')}
       ${x.rt ? `<dt>กลับ ${esc(CFG.ORIGIN || 'ต้นทาง')}</dt><dd>${x.done[x.ns] ? `<span style="color:var(--arrived)">✓ กลับถึงแล้ว ${hhmm(x.done[x.ns])}</span>` : 'ยังไม่กลับถึง (รอบไป-กลับ)'}</dd>` : ''}
       <dt>รถขนส่ง</dt><dd>${esc(t.transport || '-')}</dd><dt>บริษัทขนส่ง</dt><dd>${t.company ? coHtml(t.company) : '-'}</dd>
+      <dt>Type</dt><dd>${esc(jobTh(t))}</dd>
       <dt>ประเภทรถ</dt><dd>${esc(t.vehicleType || '-')}</dd><dt>ทะเบียนรถ</dt><dd>${esc(t.plate || '-')}</dd>
       <dt>ผู้ขับ</dt><dd>${esc(t.driver || '-')}</dd>
       <dt>เบอร์โทร</dt><dd>${t.phone ? `<a style="color:var(--departed)" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : '-'}</dd>
@@ -805,6 +807,12 @@ function openDetail(code) {
   if (!$('dlg').open) $('dlg').showModal();
 }
 
+// Type ของงาน (คอลัมน์ Type จาก Calendar Plan) : domestic = ในประเทศ, oversea = ต่างประเทศ
+const jobTh = t => { const j = String(t.jobType || '').toLowerCase(); return /^overs/.test(j) ? 'oversea (ต่างประเทศ)' : /^domes/.test(j) ? 'domestic (ในประเทศ)' : t.jobType || (t.intl ? '- (ต่างประเทศ ตามประเภทรถ)' : '-'); };
+const jobSel = (val, old) => { const v = String(val || ''), opts = [['', '- ไม่ระบุ (ดูจากประเภทรถ) -'], ['domestic', 'domestic (ในประเทศ)'], ['oversea', 'oversea (ต่างประเทศ)']];
+  if (v && !opts.some(o => o[0] === v.toLowerCase())) opts.push([v, v]);
+  return `<label>Type (ในประเทศ / ต่างประเทศ)<select name="jobType"${old ? ` data-old="${esc(v)}"` : ''}>${opts.map(o => `<option value="${esc(o[0])}"${o[0] === v.toLowerCase() || o[0] === v ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select></label>`; };
+
 /* ---------- แก้ไขข้อมูลใน Popup แล้วบันทึกกลับชีต Plan (ประวัติการแก้อยู่ในชีต Edit_Log) ---------- */
 function openEdit() {
   const t = tasks.find(x => x.taskCode === openCode);
@@ -813,7 +821,7 @@ function openEdit() {
   const slot = k => t.stops.find(sp => sp.slot === k) || {};
   const f = (key, label, val, type, wide) => `<label class="${wide ? 'wide' : ''}">${label}<input name="${key}" type="${type || 'text'}" value="${esc(val || '')}" data-old="${esc(val || '')}"></label>`;
   let h = `<form class="ef" id="editForm">
-    ${f('detail', 'Detail', t.detail, 'text', true)}${f('client', 'Client Name', t.client)}${f('round', 'รอบขนส่ง', t.round)}
+    ${f('detail', 'Detail', t.detail, 'text', true)}${f('client', 'Client Name', t.client)}${jobSel(t.jobType, true)}${f('round', 'รอบขนส่ง', t.round)}
     ${f('pickup', 'ตารางเวลา (Schedule)', t.pickup, 'time')}${f('transport', 'Transport', t.transport)}
     ${f('company', 'ชื่อบริษัทขนส่ง', t.company)}${f('vehicleType', 'ประเภทรถ', t.vehicleType)}
     ${f('plate', 'ทะเบียนรถ (เช่น 3 ฒผ 2186)', t.plate)}${f('driver', 'ชื่อผู้ขับ', t.driver)}${f('phone', 'เบอร์โทรผู้ขับ', t.phone)}`;
@@ -856,7 +864,7 @@ function openCreate() {
   let h = `<form class="ef" id="editForm">
     <label>วันที่ (Date)<input id="newDate" type="date" value="${esc(pickedDate || today())}" required></label>
     <label>Task Code ที่จะได้<b id="newCode" style="display:block;font-size:1.25em;padding:.25em 0">…</b></label>
-    ${f('detail', 'Detail', 'text', true)}${f('client', 'Client Name')}${f('round', 'รอบขนส่ง (เช่น รอบเดียว / ไป-กลับ)')}
+    ${f('detail', 'Detail', 'text', true)}${f('client', 'Client Name')}${jobSel('', false)}${f('round', 'รอบขนส่ง (เช่น รอบเดียว / ไป-กลับ)')}
     ${f('pickup', 'ตารางเวลา (Schedule)', 'time')}${f('transport', 'Transport')}
     ${f('company', 'ชื่อบริษัทขนส่ง')}${f('vehicleType', 'ประเภทรถ')}
     ${f('plate', 'ทะเบียนรถ (เช่น 3 ฒผ 2186)')}${f('driver', 'ชื่อผู้ขับ')}${f('phone', 'เบอร์โทรผู้ขับ')}`;
@@ -877,7 +885,7 @@ function openCreate() {
 }
 async function saveCreate() {
   const date = $('newDate').value, fields = {};
-  $('editForm').querySelectorAll('input[name]').forEach(i => { if (i.value.trim()) fields[i.name] = i.value.trim(); });
+  $('editForm').querySelectorAll('input[name], select[name]').forEach(i => { if (i.value.trim()) fields[i.name] = i.value.trim(); });
   if (!date) { $('editMsg').textContent = 'กรุณาเลือกวันที่'; return; }
   if (!fields.stop1 && !fields.detail) { $('editMsg').textContent = 'กรุณากรอก Detail หรือชื่อจุดส่งที่ 1 อย่างน้อยหนึ่งช่อง'; return; }
   if (DEMO) { $('editMsg').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ต่อกับฐานข้อมูล จึงสร้างงานไม่ได้'; return; }
@@ -978,7 +986,7 @@ $('dlgDel').onclick = () => {
 
 async function saveEdit() {
   const changes = {};
-  $('editForm').querySelectorAll('input').forEach(i => { if (i.value.trim() !== i.dataset.old) changes[i.name] = i.value.trim(); });
+  $('editForm').querySelectorAll('input[name], select[name]').forEach(i => { if (i.value.trim() !== (i.dataset.old || '')) changes[i.name] = i.value.trim(); });
   if (!Object.keys(changes).length) return openDetail(openCode);
   if (DEMO) { $('editMsg').textContent = 'โหมดตัวอย่าง: ยังไม่ได้ต่อกับฐานข้อมูล จึงบันทึกไม่ได้'; return; }
   $('editSave').disabled = true; $('editMsg').textContent = 'กำลังบันทึก…';

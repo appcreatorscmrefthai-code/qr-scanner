@@ -1,5 +1,5 @@
 -- =====================================================================
--- Delivery Tracking : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.15-s19)
+-- Delivery Tracking : ตั้งค่าฐานข้อมูล Supabase   (รุ่น 2026.10.16-s20)
 -- วิธีใช้ : Supabase > SQL Editor > New query > วางทั้งไฟล์นี้ > กด Run
 -- รันซ้ำได้ ข้อมูลเดิมไม่หาย (ใช้ตอนผมส่งรุ่นแก้ไขมาให้)
 -- =====================================================================
@@ -31,6 +31,8 @@ create table if not exists public.plan (
   updated_by   text not null default ''
 );
 create index if not exists plan_date_idx on public.plan (date);
+-- รุ่น s20 : ชนิดงานจากคอลัมน์ Type ของ Calendar Plan (domestic = ในประเทศ, oversea = ต่างประเทศ) ว่าง = ดูจากประเภทรถแบบเดิม
+alter table public.plan add column if not exists job_type text not null default '';
 
 create table if not exists public.pickup_log (
   id        bigint generated always as identity primary key,
@@ -123,6 +125,14 @@ language sql immutable as $$
 $$;
 create or replace function public.is_intl(v text) returns boolean
 language sql immutable as $$ select public.intl_kind(v) <> '' $$;
+-- งานต่างประเทศหรือไม่ : ยึดคอลัมน์ Type ก่อน (oversea / domestic) ถ้าว่างจึงดูจากประเภทรถ (CL / LCL / DHL)
+create or replace function public.task_intl(p_job text, p_vehicle text) returns boolean
+language sql immutable as $$
+  select case
+    when lower(btrim(coalesce(p_job, ''))) ~ '^(overs|intl|international|export|ต่างประเทศ)' then true
+    when lower(btrim(coalesce(p_job, ''))) ~ '^(domes|local|ในประเทศ)' then false
+    else public.is_intl(p_vehicle) end
+$$;
 
 -- ทะเบียนรถ : "3 ฒผ 2186", "ฒผ 2186" หรือ "70-1234"  (ไม่ถูกรูปแบบคืนค่าว่าง)
 create or replace function public.norm_plate(v text) returns text
@@ -257,7 +267,7 @@ begin
     -- รูปส่งงาน WH (pickup.html) / QA (qa.html) : ส่งได้หลายครั้งจนกว่าจะผ่าน 24 ชม. นับจากอัปโหลดครั้งล่าสุดของฝ่ายนั้น รวมไม่เกิน WH 20 / QA 50 รูป
     v_dept := case when p->>'form' = 'qa' then 'QA' else 'WH' end;
     -- งานต่างประเทศ WH : ต้องส่งรูปรถเข้าก่อน ; ส่งรูปส่งงานครั้งแรก = เวลารถออก (จบงาน)
-    if v_dept = 'WH' and public.is_intl(t.vehicle_type)
+    if v_dept = 'WH' and public.task_intl(t.job_type, t.vehicle_type)
        and not exists (select 1 from public.road_log where task_code = t.task_code and type = 'checkin') then
       raise exception 'กรุณาส่งรูปรถเข้า (หัวข้อ 2) ก่อนส่งรูปส่งงาน';
     end if;
@@ -266,12 +276,12 @@ begin
       raise exception 'ปิดรับรูปจาก % แล้ว (เกิน 24 ชม. นับจากอัปโหลดครั้งล่าสุด)', v_dept;
     end if;
     v_have := public.dept_photo_count(t.task_code, v_dept);
-    if v_have >= public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) then
-      raise exception 'ส่งรูปจาก % ครบ % รูปแล้ว ส่งเพิ่มไม่ได้', v_dept, public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type));
+    if v_have >= public.dept_photo_max(v_dept, public.task_intl(t.job_type, t.vehicle_type)) then
+      raise exception 'ส่งรูปจาก % ครบ % รูปแล้ว ส่งเพิ่มไม่ได้', v_dept, public.dept_photo_max(v_dept, public.task_intl(t.job_type, t.vehicle_type));
     end if;
-    ph := public.photo_list(p->'photos', pre, public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) - v_have, t.key);
+    ph := public.photo_list(p->'photos', pre, public.dept_photo_max(v_dept, public.task_intl(t.job_type, t.vehicle_type)) - v_have, t.key);
     insert into public.pickup_log (time, task_code, note, photos, dept) values (v_now, t.task_code, v_note, coalesce(ph, '{}'), v_dept) returning id into v_id;
-    if v_dept = 'WH' and public.is_intl(t.vehicle_type)
+    if v_dept = 'WH' and public.task_intl(t.job_type, t.vehicle_type)
        and not exists (select 1 from public.road_log where task_code = t.task_code and type = 'depart') then
       v_fin := true;
       insert into public.road_log (time, task_code, type, note, finish)
@@ -281,7 +291,7 @@ begin
   elsif p->>'form' in ('wh_in', 'wh_out') then
     -- งานต่างประเทศ : WH ส่งรูปรถเข้า (รวมไม่เกิน 20 รูป ส่งเพิ่มได้ภายใน 24 ชม.) ส่งครั้งแรก = เวลารถเข้า
     -- (wh_out = ปุ่มรถออกรุ่นเก่า s18 เก็บไว้กันฟอร์มที่ค้างในมือถือ ; รุ่นนี้รถออก = ส่งรูปส่งงาน WH ครั้งแรก)
-    if not public.is_intl(t.vehicle_type) then raise exception 'งานนี้ไม่ใช่งานต่างประเทศ (ประเภทรถ %)', coalesce(nullif(t.vehicle_type, ''), '-'); end if;
+    if not public.task_intl(t.job_type, t.vehicle_type) then raise exception 'งานนี้ไม่ใช่งานต่างประเทศ (ประเภทรถ %)', coalesce(nullif(t.vehicle_type, ''), '-'); end if;
     if p->>'form' = 'wh_in' then
       select id, time, cardinality(unload) into v_id, v_ref, v_have from public.road_log where task_code = t.task_code and type = 'checkin' order by id limit 1;
       if v_id is null then
@@ -305,7 +315,7 @@ begin
     end if;
 
   elsif p->>'form' = 'driver' then
-    if public.is_intl(t.vehicle_type) then raise exception 'งานต่างประเทศ (%) ไม่ใช้ฟอร์มคนขับ : WH บันทึกรถเข้า-ออกในฟอร์มอัปโหลดรูป WH', t.vehicle_type; end if;
+    if public.task_intl(t.job_type, t.vehicle_type) then raise exception 'งานต่างประเทศ (%) ไม่ใช้ฟอร์มคนขับ : WH บันทึกรถเข้า-ออกในฟอร์มอัปโหลดรูป WH', t.vehicle_type; end if;
     e := array[public.hm(p->'eta'->>0), case when n >= 2 then public.hm(p->'eta'->>1) else '' end, case when n >= 3 then public.hm(p->'eta'->>2) else '' end];
     if v_type = 'checkin' then
       v_plate := public.norm_plate(p->>'plate');
@@ -384,7 +394,7 @@ begin
     select photos, dept into cur, v_dept from public.pickup_log where id = v_id and task_code = t.task_code for update;
     if not found then raise exception 'ไม่พบรายการที่จะแนบรูป'; end if;
     v_other := public.dept_photo_count(t.task_code, v_dept) - cardinality(cur);          -- รวมทุกครั้งของฝ่ายนั้นไม่เกิน WH 20 / QA 50 รูป
-    add := public.photo_list(to_jsonb(cur) || coalesce(p->'photos', '[]'::jsonb), pre, greatest(cardinality(cur), public.dept_photo_max(v_dept, public.is_intl(t.vehicle_type)) - v_other), t.key);
+    add := public.photo_list(to_jsonb(cur) || coalesce(p->'photos', '[]'::jsonb), pre, greatest(cardinality(cur), public.dept_photo_max(v_dept, public.task_intl(t.job_type, t.vehicle_type)) - v_other), t.key);
     update public.pickup_log set photos = coalesce(add, '{}') where id = v_id;
   else
     select road, type, stop into cur, v_type, v_stop from public.road_log where id = v_id and task_code = t.task_code for update;
@@ -420,7 +430,7 @@ $$;
 create or replace function public.task_done(p public.plan) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.road_log l where l.task_code = p.task_code and (l.finish
-    or (public.is_intl(p.vehicle_type) and l.type = 'depart')
+    or (public.task_intl(p.job_type, p.vehicle_type) and l.type = 'depart')
     or (coalesce(p.round, '') like '%กลับ%' and l.type = 'return')
     or (coalesce(p.round, '') not like '%กลับ%' and l.type = 'unload'
         and l.stop = greatest(1, (public.blank(p.stop1) <> '')::int + (public.blank(p.stop2) <> '')::int + (public.blank(p.stop3) <> '')::int))))
@@ -456,7 +466,7 @@ begin
   if public.is_canceled(t.status) then raise exception 'CANCELED'; end if;
   for k, v in select * from jsonb_each_text(coalesce(p_changes, '{}'::jsonb)) loop
     select * into m from (values
-      ('detail','detail','text','Detail'), ('client','client','text','Client Name'), ('transport','transport','text','Transport'),
+      ('detail','detail','text','Detail'), ('client','client','text','Client Name'), ('jobType','job_type','text','Type'), ('transport','transport','text','Transport'),
       ('pickup','schedule','time','Schedule'), ('arr1','arr1','time','Arrival Time 1'), ('arr2','arr2','time','Arrival Time 2'), ('arr3','arr3','time','Arrival Time 3'),
       ('company','company','text','ชื่อบริษัทขนส่ง'), ('vehicleType','vehicle_type','text','ประเภทรถ'), ('plate','plate','plate','ทะเบียนรถ'),
       ('driver','driver','text','ชื่อผู้ขับ'), ('phone','phone','text','เบอร์โทรผู้ขับ'), ('round','round','text','รอบขนส่ง'),
@@ -497,15 +507,16 @@ begin
     if v_code = '' then continue; end if;
     v_date := public.to_date_loose(r->>'date');
     if v_date is null then raise exception 'งาน %: วันที่ไม่ถูกต้อง (%)', v_code, coalesce(r->>'date', ''); end if;
-    insert into public.plan as t (task_code, date, detail, client, transport, schedule, arr1, arr2, arr3, company, vehicle_type, plate, driver, phone, round,
+    insert into public.plan as t (task_code, date, detail, client, job_type, transport, schedule, arr1, arr2, arr3, company, vehicle_type, plate, driver, phone, round,
         stop1, map1, rec1, stop2, map2, rec2, stop3, map3, rec3, status, updated_at, updated_by)
-    values (v_code, v_date, public.blank(r->>'detail'), public.blank(r->>'client'), public.blank(r->>'transport'),
+    values (v_code, v_date, public.blank(r->>'detail'), public.blank(r->>'client'), lower(public.blank(r->>'job_type')), public.blank(r->>'transport'),
         public.hm(r->>'schedule'), public.hm(r->>'arr1'), public.hm(r->>'arr2'), public.hm(r->>'arr3'),
         public.blank(r->>'company'), public.blank(r->>'vehicle_type'), public.blank(r->>'plate'), public.blank(r->>'driver'), public.blank(r->>'phone'), public.blank(r->>'round'),
         public.blank(r->>'stop1'), public.blank(r->>'map1'), public.blank(r->>'rec1'), public.blank(r->>'stop2'), public.blank(r->>'map2'), public.blank(r->>'rec2'),
         public.blank(r->>'stop3'), public.blank(r->>'map3'), public.blank(r->>'rec3'), public.blank(r->>'status'), v_now, v_who)
     on conflict (task_code) do update set
         date = excluded.date, detail = excluded.detail, client = excluded.client, transport = excluded.transport, schedule = excluded.schedule,
+        job_type = case when r ? 'job_type' then excluded.job_type else t.job_type end,
         arr1 = excluded.arr1, arr2 = excluded.arr2, arr3 = excluded.arr3, company = excluded.company, vehicle_type = excluded.vehicle_type,
         plate = excluded.plate, driver = excluded.driver, phone = excluded.phone, round = excluded.round,
         stop1 = excluded.stop1, map1 = excluded.map1, rec1 = excluded.rec1, stop2 = excluded.stop2, map2 = excluded.map2, rec2 = excluded.rec2,
@@ -534,7 +545,7 @@ begin
     if public.is_canceled(v_status) then n_lock := n_lock + 1; continue; end if;   -- งานที่ยกเลิกแล้วแก้ไม่ได้
     v_hit := false;
     for m in select * from (values
-      ('date','date','date','Date'), ('detail','detail','text','Detail'), ('client','client','text','Client Name'), ('transport','transport','text','Transport'),
+      ('date','date','date','Date'), ('detail','detail','text','Detail'), ('client','client','text','Client Name'), ('job_type','job_type','text','Type'), ('transport','transport','text','Transport'),
       ('schedule','schedule','time','Schedule'), ('arr1','arr1','time','Arrival Time 1'), ('arr2','arr2','time','Arrival Time 2'), ('arr3','arr3','time','Arrival Time 3'),
       ('company','company','text','ชื่อบริษัทขนส่ง'), ('vehicle_type','vehicle_type','text','ประเภทรถ'), ('plate','plate','plate','ทะเบียนรถ'),
       ('driver','driver','text','ชื่อผู้ขับ'), ('phone','phone','text','เบอร์โทรผู้ขับ'), ('round','round','text','รอบขนส่ง'),
@@ -693,8 +704,9 @@ create policy photos_read on storage.objects for select to authenticated
   using (bucket_id = 'photos' and public.is_member());
 
 -- ---------- 9. มุมมองสำหรับดึงข้อมูลลง Excel (ปุ่มใน Excel) : เวลาเป็นเวลาไทย อ่านได้เฉพาะผู้ใช้ที่เข้าสู่ระบบ ----------
-create or replace view public.v_plan with (security_invoker = true) as
-select t.task_code, to_char(t.date, 'YYYY-MM-DD') as date, t.detail, t.client, t.transport, t.schedule, t.arr1, t.arr2, t.arr3,
+drop view if exists public.v_plan;            -- s20 : เพิ่มคอลัมน์ Type ต่อจาก Client Name (ตรงกับชีต Plan) ต้องสร้างใหม่
+create view public.v_plan with (security_invoker = true) as
+select t.task_code, to_char(t.date, 'YYYY-MM-DD') as date, t.detail, t.client, t.job_type, t.transport, t.schedule, t.arr1, t.arr2, t.arr3,
        t.company, t.vehicle_type, t.plate, t.driver, t.phone, t.round,
        t.stop1, t.map1, t.rec1, t.stop2, t.map2, t.rec2, t.stop3, t.map3, t.rec3, t.status,
        to_char(t.updated_at at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS.US') as synced, t.updated_by
@@ -870,7 +882,7 @@ begin
   for p in select * from public.plan t where t.date between today - 2 and today and not public.is_canceled(t.status) order by t.date, t.schedule, t.task_code loop
     eff := coalesce((select l.plate from public.road_log l where l.task_code = p.task_code and l.type = 'checkin' order by l.id limit 1), p.plate);
     if public.plate_key(eff) <> p_key then continue; end if;
-    if public.is_intl(p.vehicle_type) then continue; end if;                         -- งานต่างประเทศ : ไม่ใช้ GPS
+    if public.task_intl(p.job_type, p.vehicle_type) then continue; end if;                         -- งานต่างประเทศ : ไม่ใช้ GPS
 
     names := '{}'; maps := '{}'; slots := '{}';
     for i in 1..3 loop
@@ -1279,7 +1291,7 @@ language sql stable security definer set search_path = public as $$
   cross join lateral (
     select l.time, l.source from public.road_log l
     where l.task_code = t.task_code and l.type in ('arrive', 'unload') and l.stop = s.i order by l.time, l.id limit 1) a
-  where t.date between p_from and p_to and not public.is_canceled(t.status) and x.pt[s.slot + 1] is not null and not public.is_intl(t.vehicle_type)
+  where t.date between p_from and p_to and not public.is_canceled(t.status) and x.pt[s.slot + 1] is not null and not public.task_intl(t.job_type, t.vehicle_type)
 $$;
 
 create or replace function public.delay_detail(p_from date, p_to date) returns jsonb
@@ -1348,7 +1360,7 @@ begin
     if coalesce(array_length(names, 1), 0) = 0 then names := array[public.blank(p.detail)]; maps := array['']; slots := array[1]; end if;
     ns := array_length(names, 1);
     rt := p.round like '%กลับ%';
-    fin := case when public.is_intl(p.vehicle_type) then exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'depart')
+    fin := case when public.task_intl(p.job_type, p.vehicle_type) then exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'depart')
                 when rt then exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'return')
                 else exists (select 1 from public.road_log l where l.task_code = p.task_code and l.type = 'unload' and l.stop = ns) end;
     if p.date < p_date and fin then continue; end if;         -- งานข้ามวันที่จบแล้วไม่ต้องแสดง
@@ -1641,4 +1653,4 @@ begin
 end $$;
 revoke all on function public.photo_remove(text, text), public.stop_photo_count(text, int), public.dept_photo_count(text, text) from public, anon, authenticated;
 grant execute on function public.photo_remove(text, text) to authenticated;
-grant execute on function public.intl_kind(text), public.is_intl(text) to anon, authenticated;
+grant execute on function public.intl_kind(text), public.is_intl(text), public.task_intl(text, text) to anon, authenticated;

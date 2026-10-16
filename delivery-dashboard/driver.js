@@ -16,10 +16,10 @@
     DF.say('กำลังโหลดข้อมูลงาน…', 'info');
     try {
       task = (await DF.retry(() => DF.apiGet({ action: 'task', code }), 2)).task;
-      const t0type = task.vehicleType;
-      if (SB.intlInfo(task.vehicleType)) {          // งานต่างประเทศ : WH บันทึกรถเข้า-ออก ไม่ใช้ฟอร์มคนขับ
+      const iInfo = SB.taskIntl(task);
+      if (iInfo) {                                  // งานต่างประเทศ : WH บันทึกรถเข้า-ออก ไม่ใช้ฟอร์มคนขับ
         const k = task.taskCode; task = null; show('app', false); show('scanCard', false);
-        DF.say(`งาน ${k} เป็นงานต่างประเทศ (${SB.intlInfo(t0type).label}) ไม่ต้องใช้ฟอร์มคนขับ : WH บันทึกรถเข้า-รถออกในฟอร์มอัปโหลดรูป WH`, 'info'); return;
+        DF.say(`งาน ${k} เป็นงานต่างประเทศ (${iInfo.label}) ไม่ต้องใช้ฟอร์มคนขับ : WH บันทึกรถเข้า-รถออกในฟอร์มอัปโหลดรูป WH`, 'info'); return;
       }
       if (DF.isGpsCompany(task.company) && !DF.param('force')) { location.replace('road-gps.html?task=' + encodeURIComponent(task.taskCode)); return; }   // ผู้ให้บริการที่ใช้ GPS
       show('scanCard', false); show('app', true);

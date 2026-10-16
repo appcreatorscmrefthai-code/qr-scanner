@@ -5,7 +5,7 @@ window.SB = (function () {
   const CFG = window.APP_CONFIG || {};
   const URL0 = String(CFG.SUPABASE_URL || '').replace(/\/+$/, ''), KEY = CFG.SUPABASE_KEY || '';
   const ON = !!(URL0 && KEY);
-  const VER = '2026.10.15-s19';
+  const VER = '2026.10.16-s20';
 
   // เรียก API หนึ่งครั้ง : สำเร็จคืนข้อมูล, ไม่สำเร็จ throw Error (e.status = รหัส HTTP, e.server = true เมื่อเซิร์ฟเวอร์ปฏิเสธเอง)
   async function call(path, opt) {
@@ -28,11 +28,14 @@ window.SB = (function () {
   }
   const rpc = (fn, args, opt) => call('/rest/v1/rpc/' + fn, Object.assign({ body: args || {} }, opt || {}));
 
-  /* ---------- งานต่างประเทศ (ประเภทรถพิเศษ) : ตรวจเฉพาะรถเข้า-ออก (WH บันทึก) เตือน Follow เมื่ออยู่ SCM นานเกินเกณฑ์ ไม่มี Delay ----------
-     ตรงกับ public.intl_kind() ในฐานข้อมูล ; เกณฑ์ (นาที) ปรับได้ที่ config.js : INTL_FOLLOW_MIN */
+  /* ---------- งานต่างประเทศ : ตรวจเฉพาะรถเข้า-ออก (WH บันทึก) เตือน Follow เมื่ออยู่ SCM นานเกินเกณฑ์ ไม่มี Delay ----------
+     ยึดคอลัมน์ Type (job_type) ก่อน : oversea = ต่างประเทศ, domestic = ในประเทศ ; ว่าง = ดูจากประเภทรถ (งานเก่า)
+     ชนิดย่อย (ไอคอน / เกณฑ์) ดูจากประเภทรถ ; ไม่ทราบ = OVS (ต่างประเทศทั่วไป)
+     ตรงกับ public.task_intl() ในฐานข้อมูล ; เกณฑ์ (นาที) ปรับได้ที่ config.js : INTL_FOLLOW_MIN */
   const INTL = {
     CL20FT: { label: 'CL 20FT', icon: 'i-c20', min: 120 }, CL40FT: { label: 'CL 40FT', icon: 'i-c40', min: 240 },
-    CL40HC: { label: 'CL 40HC', icon: 'i-c40', min: 240 }, LCL: { label: 'LCL', icon: 'i-ship', min: 30 }, DHL: { label: 'DHL', icon: 'i-plane', min: 30 }
+    CL40HC: { label: 'CL 40HC', icon: 'i-c40', min: 240 }, LCL: { label: 'LCL', icon: 'i-ship', min: 30 }, DHL: { label: 'DHL', icon: 'i-plane', min: 30 },
+    OVS: { label: 'ต่างประเทศ', icon: 'i-ship', min: 240 }
   };
   Object.keys(CFG.INTL_FOLLOW_MIN || {}).forEach(k => { if (INTL[k] && CFG.INTL_FOLLOW_MIN[k] > 0) INTL[k].min = Number(CFG.INTL_FOLLOW_MIN[k]); });
   function intlKind(v) {
@@ -40,6 +43,14 @@ window.SB = (function () {
     return x.startsWith('CL20') ? 'CL20FT' : x.startsWith('CL40HC') ? 'CL40HC' : x.startsWith('CL40') ? 'CL40FT' : x.startsWith('LCL') ? 'LCL' : x.startsWith('DHL') ? 'DHL' : '';
   }
   const intlInfo = v => INTL[intlKind(v)] || null;
+  // ชนิดงานต่างประเทศของงาน ('' = ในประเทศ) จาก Type + ประเภทรถ
+  function jobKind(job, vehicle) {
+    const j = String(job || '').trim().toLowerCase();
+    if (/^(overs|intl|international|export|ต่างประเทศ)/.test(j)) return intlKind(vehicle) || 'OVS';
+    if (/^(domes|local|ในประเทศ)/.test(j)) return '';
+    return intlKind(vehicle);
+  }
+  const taskIntl = t => (t && INTL[t.intl]) || null;
 
   /* ---------- แปลงแถวในฐานข้อมูลเป็นรูปแบบที่หน้าเว็บใช้ ---------- */
   function task(p) {
@@ -48,9 +59,9 @@ window.SB = (function () {
     // ถ้าไม่ได้กรอกจุดที่ 1-3 ให้ใช้ Detail เป็นจุดส่งเดียว
     if (!stops.length) stops.push({ slot: 1, name: p.detail || p.task_code, arrival: p.arr1 || '', map: '', receiver: '' });
     return {
-      taskCode: p.task_code, date: p.date, detail: p.detail || '', client: p.client || '', transport: p.transport || '', pickup: p.schedule || '',
+      taskCode: p.task_code, date: p.date, detail: p.detail || '', client: p.client || '', jobType: p.job_type || '', transport: p.transport || '', pickup: p.schedule || '',
       company: p.company || '', vehicleType: p.vehicle_type || '', plate: p.plate || '', driver: p.driver || '', phone: p.phone || '',
-      round: p.round || '', roundTrip: /กลับ/.test(p.round || ''), stops, intl: intlKind(p.vehicle_type),
+      round: p.round || '', roundTrip: /กลับ/.test(p.round || ''), stops, intl: jobKind(p.job_type, p.vehicle_type),
       status: p.status || '', canceled: /cancel|ยกเลิก/i.test(p.status || ''), key: p.key || '', updatedAt: p.updated_at || ''
     };
   }
@@ -87,5 +98,5 @@ window.SB = (function () {
     return t;
   }
 
-  return { ON, VER, URL: URL0, call, rpc, task, full, state, INTL, intlKind, intlInfo };
+  return { ON, VER, URL: URL0, call, rpc, task, full, state, INTL, intlKind, intlInfo, jobKind, taskIntl };
 })();

@@ -16,7 +16,7 @@
     if (!quiet) DF.say('กำลังโหลดข้อมูลงาน…', 'info');
     try {
       const t = (await DF.retry(() => DF.apiGet({ action: 'task', code }), 2)).task;
-      if (SB.intlInfo(t.vehicleType)) { location.replace('road.html?task=' + encodeURIComponent(t.taskCode)); return; }   // งานต่างประเทศ : road.html แจ้งให้ใช้ฟอร์ม WH
+      if (SB.taskIntl(t)) { location.replace('road.html?task=' + encodeURIComponent(t.taskCode)); return; }   // งานต่างประเทศ : road.html แจ้งให้ใช้ฟอร์ม WH
       if (!DF.isGpsCompany(t.company)) { location.replace('road.html?task=' + encodeURIComponent(t.taskCode)); return; }
       task = t; show('scanCard', false); show('app', true);
       DF.say(''); $('manualLink').href = pagePath(); render();

@@ -3,14 +3,17 @@ Option Explicit
 
 ' ============================================================================
 '  Delivery Tracking : ปุ่มใน Excel สำหรับส่งแผนขึ้นระบบ และดึงข้อมูลกลับลงไฟล์  (ไฟล์ Delivery_Tracking.xlsm)
-'  รุ่น 2026.10.15-y3  (เพิ่ม DP_WebNextSeq ให้ modImportCalendar เติม Task Code จากเลขล่าสุดบนเว็บ / เปลี่ยนชื่อเป็น Delivery Tracking)
+'  รุ่น 2026.10.16-y5  (เพิ่มคอลัมน์ E = Type : domestic / oversea จาก export-tasks ใช้แยกงานในประเทศ/ต่างประเทศ
+'                     ไฟล์เดิมที่ยังไม่มีคอลัมน์ Type ระบบแทรกคอลัมน์ E ให้เอง / DP_AutoRun รับช่วงวันที่ B1-C1)
+'  รุ่น y4 : DP_AutoRun : บอต Python ดึงแผน + ส่งงานใหม่อัตโนมัติ บันทึกผลในชีต Auto_Log
+'  รุ่น y3 : DP_WebNextSeq ให้ modImportCalendar เติม Task Code จากเลขล่าสุดบนเว็บ / เปลี่ยนชื่อเป็น Delivery Tracking
 '
 '  โครงสร้างไฟล์ (รุ่นนี้)
 '    Plan         = ชีตสำหรับ "ส่งค่า" อย่างเดียว : พิมพ์/วางงานใหม่ แล้วกด ส่งงานใหม่ขึ้นระบบ
-'                   คอลัมน์ A-Y ตรงกับ Plan_Backup ทุกประการ  คอลัมน์ Z = "ส่งแล้ว ปปปป-ดด-วว ชช:นน" (ส่งแล้วไม่ส่งซ้ำ)
+'                   คอลัมน์ A-Z ตรงกับ Plan_Backup ทุกประการ  คอลัมน์ AA = "ส่งแล้ว ปปปป-ดด-วว ชช:นน" (ส่งแล้วไม่ส่งซ้ำ)
 '                   งานที่ Task Code มีบนระบบอยู่แล้ว "ไม่ถูกเขียนทับ" ให้ไปแก้ที่ชีต Plan_Backup แทน
-'                   (ไฟล์เก่าที่ส่งไปแล้วหรือคอลัมน์ Z เป็นเวลาซิงก์ ไม่ถูกแตะต้อง)
-'    Plan_Backup  = ชีตสำรองข้อมูลงานจากเว็บ (ดึงด้วย DP_PullAll) คอลัมน์ Z = เวลาที่แถวนี้ตรงกับระบบ
+'                   (ไฟล์เก่าที่ส่งไปแล้วหรือคอลัมน์ AA เป็นเวลาซิงก์ ไม่ถูกแตะต้อง)
+'    Plan_Backup  = ชีตสำรองข้อมูลงานจากเว็บ (ดึงด้วย DP_PullAll) คอลัมน์ AA = เวลาที่แถวนี้ตรงกับระบบ
 '                   ถ้าต้องการแก้งานที่มีบนระบบแล้ว ให้แก้ค่าในชีตนี้ แล้วกด ส่งค่าที่แก้ไข (DP_SendChanges)
 '                   จะส่งเฉพาะแถวที่ต่างจากบนระบบ และถามก่อนถ้าถูกแก้บนระบบหลังจากที่ดึงมาล่าสุด
 '    Pickup_Log / Road_Log / Edit_Log / Task_Summary / Delay_Detail / Delay_Daily / Delay_Monthly
@@ -26,6 +29,7 @@ Option Explicit
 '    DP_FillPlaces     เติมพิกัดจุดส่งจากลิงก์แผนที่ (ทำให้อัตโนมัติหลังส่งงานอยู่แล้ว)
 '    DP_BackupAll      ดึงทุกอย่างในครั้งเดียว (Plan_Backup + Log + Task_Summary + Delay) ทั้งช่วงข้อมูล ไม่บันทึกไฟล์
 '    DP_BackupFill     ใช้กับงาน Backup อัตโนมัติ (Python) : รับ access token ไม่มีหน้าต่างใดๆ ผลลัพธ์อยู่ใน DP_LastBackupResult
+'    DP_AutoRun        ใช้กับบอต Python (calplan_bot.py) : ใส่วันที่ B1 > ดึงแผน (ไม่ต้องเลือกไฟล์) > ส่งงานใหม่ ไม่มีหน้าต่าง บันทึกผลในชีต Auto_Log
 '    DP_SetupButtons   สร้างปุ่มทั้งหมด (รันครั้งเดียว)
 '    DP_SignOut        ออกจากระบบ (ลืมการเข้าสู่ระบบที่จำไว้ระหว่างเปิดไฟล์)
 '
@@ -40,11 +44,15 @@ Private Const LOGIN_DOMAIN As String = "scmdelivery.local"
 Private Const APP_TITLE As String = "Delivery Tracking"
 Private Const PLAN_SHEET As String = "Plan"            ' ชีตส่งงานใหม่ (ส่งค่าอย่างเดียว)
 Private Const BACKUP_SHEET As String = "Plan_Backup"   ' ชีตสำรองงานจากเว็บ และใช้แก้งานเดิม
-Private Const NCOL As Long = 25            ' คอลัมน์ A ถึง Y ของชีต Plan / Plan_Backup
-Private Const COL_SYNC As Long = 26        ' คอลัมน์ Z : Plan = ส่งแล้ว..., Plan_Backup = เวลาที่ข้อมูลแถวนี้ตรงกับระบบครั้งล่าสุด
+Private Const NCOL As Long = 26            ' คอลัมน์ A ถึง Z ของชีต Plan / Plan_Backup
+Private Const COL_SYNC As Long = 27        ' คอลัมน์ AA : Plan = ส่งแล้ว..., Plan_Backup = เวลาที่ข้อมูลแถวนี้ตรงกับระบบครั้งล่าสุด
+Private Const COL_TYPE As Long = 5          ' คอลัมน์ E : Type (domestic / oversea)
+Private Const COL_SCHED As Long = 7         ' คอลัมน์ G-J : Schedule, Arrival Time 1-3 (เวลา ชช:นน)
+Private Const COL_ARR3 As Long = 10
+Private Const COL_PLATE As Long = 13        ' คอลัมน์ M : ทะเบียนรถ
 Private Const SENT_PREFIX As String = "ส่งแล้ว"
-Private Const PLAN_HEADS As String = "Task Code|Date|Detail|Client Name|Transport|Schedule|Arrival Time 1|Arrival Time 2|Arrival Time 3|ชื่อบริษัทขนส่ง|ประเภทรถ|ทะเบียนรถ|ชื่อผู้ขับ|เบอร์โทรผู้ขับ|รอบขนส่ง|จุดที่ 1|Map1|ชื่อ-เบอร์โทรผู้รับ จุดที่ 1|จุดที่ 2|Map2|ชื่อ-เบอร์โทรผู้รับ จุดที่ 2|จุดที่ 3|Map3|ชื่อ-เบอร์โทรผู้รับ จุดที่ 3|Task Status|Synced"
-Private Const PLAN_FIELDS As String = "task_code,date,detail,client,transport,schedule,arr1,arr2,arr3,company,vehicle_type,plate,driver,phone,round,stop1,map1,rec1,stop2,map2,rec2,stop3,map3,rec3,status"
+Private Const PLAN_HEADS As String = "Task Code|Date|Detail|Client Name|Type|Transport|Schedule|Arrival Time 1|Arrival Time 2|Arrival Time 3|ชื่อบริษัทขนส่ง|ประเภทรถ|ทะเบียนรถ|ชื่อผู้ขับ|เบอร์โทรผู้ขับ|รอบขนส่ง|จุดที่ 1|Map1|ชื่อ-เบอร์โทรผู้รับ จุดที่ 1|จุดที่ 2|Map2|ชื่อ-เบอร์โทรผู้รับ จุดที่ 2|จุดที่ 3|Map3|ชื่อ-เบอร์โทรผู้รับ จุดที่ 3|Task Status|Synced"
+Private Const PLAN_FIELDS As String = "task_code,date,detail,client,job_type,transport,schedule,arr1,arr2,arr3,company,vehicle_type,plate,driver,phone,round,stop1,map1,rec1,stop2,map2,rec2,stop3,map3,rec3,status"
 
 Private mToken As String
 Private mRefresh As String
@@ -55,6 +63,10 @@ Private mSilent As Boolean            ' True = โหมดไม่มีหน้าต่าง (DP_BackupFill)
 Private mOverrideToken As String      ' access token ที่ส่งมาจากภายนอก (DP_BackupFill) ใช้แทนการเข้าสู่ระบบ
 Private mLastTell As String           ' ข้อความล่าสุดที่ควรแจ้งผู้ใช้ (ใช้รายงานข้อผิดพลาดในโหมดไม่มีหน้าต่าง)
 Public DP_LastBackupResult As String  ' ผลลัพธ์บรรทัดเดียวของ DP_BackupFill / DP_BackupAll
+Public DP_LastAutoResult As String    ' ผลลัพธ์บรรทัดเดียวของ DP_AutoRun
+Private mSendOk As Boolean             ' DP_SendNew ทำงานจบ (ไม่ผิดพลาด)
+Private mSendCount As Long             ' จำนวนงานที่ DP_SendNew ส่งขึ้นระบบ
+Private Const AUTO_LOG_SHEET As String = "Auto_Log"
 Private Const SEP_CODE As Long = 30       ' อักขระคั่นช่องภายใน (ไม่มีในข้อความปกติ)
 Private mBkTotal As Long
 Private mBkAdded As Long
@@ -364,7 +376,7 @@ End Function
 Private Function Differs(ByVal c As Long, ByVal a As String, ByVal b As String) As Boolean
     a = Norm(a)
     b = Norm(b)
-    If c = 12 Then
+    If c = COL_PLATE Then
         a = UCase$(Replace(a, " ", ""))
         b = UCase$(Replace(b, " ", ""))
     End If
@@ -520,7 +532,31 @@ Private Function PlanSheet() As Worksheet
     Dim ws As Worksheet
     Set ws = FindSheet(PLAN_SHEET)
     If ws Is Nothing Then Tell "ไม่พบชีตชื่อ " & PLAN_SHEET & " ในไฟล์นี้", True
+    If Not ws Is Nothing Then
+        If Not DP_EnsureTypeCol(ws) Then Set ws = Nothing
+    End If
     Set PlanSheet = ws
+End Function
+
+' ไฟล์รุ่นก่อน y5 (ยังไม่มีคอลัมน์ Type) : แทรกคอลัมน์ E หัวตาราง "Type" ให้เอง (ระหว่าง Client Name กับ Transport)
+' ข้อมูลเดิมเลื่อนไปทางขวา 1 คอลัมน์ทั้งแถว จึงไม่เพี้ยน  คืน False ถ้าแทรกไม่สำเร็จ (เช่น ชีตถูกป้องกัน)
+Public Function DP_EnsureTypeCol(ByVal ws As Worksheet) As Boolean
+    Dim hdr As Long
+    DP_EnsureTypeCol = True
+    If ws Is Nothing Then Exit Function
+    hdr = HeaderRow(ws)
+    If hdr = 0 Then Exit Function
+    If LCase$(Trim$(CStr(ws.Cells(hdr, COL_TYPE).Value))) <> "transport" Then Exit Function
+    If LCase$(Trim$(CStr(ws.Cells(hdr, COL_TYPE - 1).Value))) <> "client name" Then Exit Function
+    On Error GoTo Fail
+    ws.Columns(COL_TYPE).Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove
+    ws.Cells(hdr, COL_TYPE).Value = "Type"
+    ws.Columns(COL_TYPE).ColumnWidth = 11
+    Exit Function
+Fail:
+    DP_EnsureTypeCol = False
+    Tell "แทรกคอลัมน์ E (Type) ในชีต " & ws.Name & " ไม่สำเร็จ: " & Err.Description & vbCrLf & _
+         "ให้แทรกคอลัมน์ E หัวตาราง Type ต่อจาก Client Name เองแล้วลองใหม่", True
 End Function
 
 ' แถวหัวตาราง = แถวที่คอลัมน์ A เขียนว่า Task Code (หาใน 10 แถวแรก) ไม่พบคืน 0
@@ -578,6 +614,7 @@ Private Function BackupSheet(ByVal makeIt As Boolean) As Worksheet
             If hp > 0 Then CopyHeader wp, hp, ws
         End If
     End If
+    If Not DP_EnsureTypeCol(ws) Then Exit Function
     hdr = HeaderRow(ws)
     If hdr = 0 Then
         h = Split(PLAN_HEADS, "|")
@@ -597,7 +634,7 @@ End Function
 Private Sub BackupNote(ByVal ws As Worksheet, ByVal hdr As Long)
     Dim t As String
     t = "ชีตนี้คือสำเนาสำรองของงานบนเว็บ (ดึงมาจากระบบ) ถ้าต้องการแก้งานที่ส่งขึ้นระบบแล้ว ให้แก้ค่าในชีตนี้ แล้วกด ส่งค่าที่แก้ไข (ส่งเฉพาะช่องที่ต่างจากบนระบบ)" & _
-        " ส่วนงานใหม่ให้พิมพ์ที่ชีต " & PLAN_SHEET & " แล้วกด ส่งงานใหม่ขึ้นระบบ  คอลัมน์ Z = เวลาที่แถวนี้ตรงกับระบบล่าสุด (อย่าแก้)"
+        " ส่วนงานใหม่ให้พิมพ์ที่ชีต " & PLAN_SHEET & " แล้วกด ส่งงานใหม่ขึ้นระบบ  คอลัมน์ AA = เวลาที่แถวนี้ตรงกับระบบล่าสุด (อย่าแก้)"
     On Error Resume Next
     If Len(Trim$(CStr(ws.Cells(4, COL_SYNC + 2).Value))) = 0 Then ws.Cells(4, COL_SYNC + 2).Value = t
     If ws.Cells(hdr, 1).Comment Is Nothing Then ws.Cells(hdr, 1).AddComment t
@@ -621,7 +658,7 @@ Private Function CellText(ByVal ws As Worksheet, ByVal r As Long, ByVal c As Lon
     If IsEmpty(v) Then Exit Function
     If VarType(v) = vbString Then
         CellText = Trim$(CStr(v))
-        If c >= 6 And c <= 9 Then CellText = HmNorm(CellText)
+        If c >= COL_SCHED And c <= COL_ARR3 Then CellText = HmNorm(CellText)
         Exit Function
     End If
     If c = 2 Then
@@ -630,7 +667,7 @@ Private Function CellText(ByVal ws As Worksheet, ByVal r As Long, ByVal c As Lon
         Else
             CellText = Trim$(CStr(v))
         End If
-    ElseIf c >= 6 And c <= 9 Then
+    ElseIf c >= COL_SCHED And c <= COL_ARR3 Then
         If VarType(v) = vbDate Or IsNumeric(v) Then
             x = CDbl(v)
             x = x - Int(x)
@@ -653,7 +690,7 @@ Private Function VText(ByVal v As Variant, ByVal c As Long) As String
     If IsEmpty(v) Then Exit Function
     If VarType(v) = vbString Then
         VText = Trim$(CStr(v))
-        If c >= 6 And c <= 9 Then VText = HmNorm(VText)
+        If c >= COL_SCHED And c <= COL_ARR3 Then VText = HmNorm(VText)
         Exit Function
     End If
     If c = 2 Then
@@ -662,7 +699,7 @@ Private Function VText(ByVal v As Variant, ByVal c As Long) As String
         Else
             VText = Trim$(CStr(v))
         End If
-    ElseIf c >= 6 And c <= 9 Then
+    ElseIf c >= COL_SCHED And c <= COL_ARR3 Then
         If VarType(v) = vbDate Or IsNumeric(v) Then
             x = CDbl(v)
             x = x - Int(x)
@@ -688,7 +725,7 @@ Private Function AllRows(ByVal ws As Worksheet, ByVal hdr As Long) As Collection
     Set AllRows = out
 End Function
 
-' ดึงข้อมูลแผนของ Task Code ที่ระบุจากระบบ : คืนชุดข้อมูล key = Task Code (ตัวพิมพ์ใหญ่) ค่า = ข้อความ 27 ช่อง (25 คอลัมน์ + synced + updated_by) แยกด้วย Fields()
+' ดึงข้อมูลแผนของ Task Code ที่ระบุจากระบบ : คืนชุดข้อมูล key = Task Code (ตัวพิมพ์ใหญ่) ค่า = ข้อความ 28 ช่อง (26 คอลัมน์ + synced + updated_by) แยกด้วย Fields()
 Private Function FetchPlan(ByVal codes As Collection, ByRef ok As Boolean) As Collection
     Dim out As New Collection, rows As Collection
     Dim i As Long, k As Long, lst As String, r As String, row As Variant
@@ -720,7 +757,7 @@ Private Function FetchPlan(ByVal codes As Collection, ByRef ok As Boolean) As Co
     ok = True
 End Function
 
-' ดึงงานทั้งหมดบนระบบ (เรียงตามวันที่ แล้ว Task Code) : คืนชุดข้อความของแต่ละแถว ใช้ Fields(แถว, 27)
+' ดึงงานทั้งหมดบนระบบ (เรียงตามวันที่ แล้ว Task Code) : คืนชุดข้อความของแต่ละแถว ใช้ Fields(แถว, 28)
 Private Function FetchAllPlan(ByRef ok As Boolean) As Collection
     Dim out As New Collection, rows As Collection, r As String, offset As Long, k As Long
     Set FetchAllPlan = out
@@ -767,7 +804,7 @@ End Function
 
 ' ---------------------------------------------------------------------------
 '  2) ดึงงานทั้งหมดจากระบบ ลงชีต Plan_Backup
-'     แถวที่ผู้ใช้แก้ในชีตแล้วยังไม่ได้ส่ง (ค่าต่างจากระบบ แต่เวลาในคอลัมน์ Z ยังตรงกับระบบ) ถามก่อนว่าจะทับหรือข้าม
+'     แถวที่ผู้ใช้แก้ในชีตแล้วยังไม่ได้ส่ง (ค่าต่างจากระบบ แต่เวลาในคอลัมน์ AA ยังตรงกับระบบ) ถามก่อนว่าจะทับหรือข้าม
 '     แถวที่ไม่มีบนระบบ (ผู้ใช้พิมพ์เอง / งานถูกลบจากระบบ) เก็บไว้ท้ายตาราง ไม่ลบ
 ' ---------------------------------------------------------------------------
 ' ช่องว่างเขียนเป็น "" (Excel ถือเป็นช่องว่าง) ไม่ใช้ Empty เพื่อไม่ให้ช่องกลายเป็น 0 ในบางโปรแกรม
@@ -789,7 +826,7 @@ Private Function ServerCellValue(ByVal sv As String, ByVal c As Long) As Variant
         Else
             ServerCellValue = sv
         End If
-    ElseIf c >= 6 And c <= 9 Then
+    ElseIf c >= COL_SCHED And c <= COL_ARR3 Then
         p = InStr(sv, ":")
         If p > 0 And IsNumeric(Left$(sv, p - 1)) And IsNumeric(Mid$(sv, p + 1, 2)) Then
             ServerCellValue = CDbl(TimeSerial(CInt(Left$(sv, p - 1)), CInt(Mid$(sv, p + 1, 2)), 0))
@@ -918,7 +955,7 @@ Private Function WriteBackup(ByVal plan As Collection, ByVal ws As Worksheet, By
         ln = hdr + nOut
         ws.Range(ws.Cells(hdr + 1, 1), ws.Cells(ln, COL_SYNC)).NumberFormat = "@"
         ws.Range(ws.Cells(hdr + 1, 2), ws.Cells(ln, 2)).NumberFormat = "yyyy-mm-dd"
-        ws.Range(ws.Cells(hdr + 1, 6), ws.Cells(ln, 9)).NumberFormat = "hh:mm"
+        ws.Range(ws.Cells(hdr + 1, COL_SCHED), ws.Cells(ln, COL_ARR3)).NumberFormat = "hh:mm"
         ws.Range(ws.Cells(hdr + 1, 1), ws.Cells(ln, COL_SYNC)).Value = vals
     End If
     WriteBackup = True
@@ -972,9 +1009,9 @@ End Function
 
 ' ---------------------------------------------------------------------------
 '  1) ส่งงานใหม่จากชีต Plan ขึ้นระบบ
-'     - ส่งเฉพาะแถวที่ Task Code ยังไม่มีบนระบบ และยังไม่ได้ประทับ "ส่งแล้ว" ในคอลัมน์ Z
+'     - ส่งเฉพาะแถวที่ Task Code ยังไม่มีบนระบบ และยังไม่ได้ประทับ "ส่งแล้ว" ในคอลัมน์ AA
 '     - Task Code ที่มีบนระบบแล้ว ไม่เขียนทับ (ให้แก้ที่ชีต Plan_Backup แล้วกดส่งค่าที่แก้ไข)
-'     - ส่งสำเร็จแล้วประทับ "ส่งแล้ว วันที่ เวลา" ที่คอลัมน์ Z ดึงข้อมูลลง Plan_Backup และเติมพิกัดจุดส่งอัตโนมัติ
+'     - ส่งสำเร็จแล้วประทับ "ส่งแล้ว วันที่ เวลา" ที่คอลัมน์ AA ดึงข้อมูลลง Plan_Backup และเติมพิกัดจุดส่งอัตโนมัติ
 ' ---------------------------------------------------------------------------
 Public Sub DP_SendNew()
     Dim ws As Worksheet, hdr As Long, rows As Collection, codes As New Collection, rowOf As New Collection
@@ -986,6 +1023,8 @@ Public Sub DP_SendNew()
     Dim body As String, resp As String, nSend As Long, nIns As Long, nUpd As Long, inBatch As Long, stamp As String
     Dim wsB As Worksheet, hdrB As Long, bkMsg As String, plMsg As String
 
+    mSendOk = False
+    mSendCount = 0
     On Error GoTo Fail
     Set ws = PlanSheet()
     If ws Is Nothing Then Exit Sub
@@ -995,7 +1034,11 @@ Public Sub DP_SendNew()
         Exit Sub
     End If
     Set rows = AllRows(ws, hdr)
-    If rows.Count = 0 Then Exit Sub
+    If rows.Count = 0 Then
+        mSendOk = True
+        mLastTell = "ไม่มีงานในชีต " & PLAN_SHEET
+        Exit Sub
+    End If
 
     ' คัดแถวที่ใช้ได้ : ข้าม Task Code ซ้ำในไฟล์ และแถวที่ไม่มีวันที่
     For i = 1 To rows.Count
@@ -1015,6 +1058,7 @@ Public Sub DP_SendNew()
         End If
     Next i
     If codes.Count = 0 Then
+        mSendOk = True
         Tell "ไม่มีงานที่ส่งได้ (ทุกแถวไม่มีวันที่หรือ Task Code ซ้ำ)", True
         Exit Sub
     End If
@@ -1080,11 +1124,13 @@ Public Sub DP_SendNew()
     ' ส่งสำเร็จแล้ว : ดึงข้อมูลลง Plan_Backup และเติมพิกัดจุดส่ง (ถ้าไม่สำเร็จแค่แจ้ง ไม่ย้อนการส่ง)
     If nSend > 0 Then bkMsg = RefreshBackupAuto(wsB, hdrB)
     plMsg = AutoPlaces(ws, hdr, wsB, hdrB)
+    mSendOk = True
+    mSendCount = nSend
 
     Tell IIf(nSend > 0, "ส่งงานใหม่ขึ้นระบบ " & CStr(nSend) & " งาน", "ไม่มีงานใหม่ที่ต้องส่ง") & _
          IIf(nOld > 0, vbCrLf & "ส่งแล้ว/มีบนระบบอยู่แล้ว (ข้าม) " & CStr(nOld) & " งาน", "") & _
          IIf(nExist > 0, vbCrLf & vbCrLf & "มีอยู่แล้วในระบบ " & CStr(nExist) & " งาน (ไม่เขียนทับ) ให้แก้ที่ชีต " & BACKUP_SHEET & ":" & exist & IIf(nExist > 10, vbCrLf & "  ...", ""), "") & _
-         IIf(nGone > 0, vbCrLf & vbCrLf & "ประทับส่งแล้วแต่ไม่พบบนระบบ " & CStr(nGone) & " งาน (ไม่ส่งซ้ำ ถ้าต้องการส่งใหม่ให้ลบข้อความในคอลัมน์ Z ของแถวนั้น):" & gone & IIf(nGone > 10, vbCrLf & "  ...", ""), "") & _
+         IIf(nGone > 0, vbCrLf & vbCrLf & "ประทับส่งแล้วแต่ไม่พบบนระบบ " & CStr(nGone) & " งาน (ไม่ส่งซ้ำ ถ้าต้องการส่งใหม่ให้ลบข้อความในคอลัมน์ AA ของแถวนั้น):" & gone & IIf(nGone > 10, vbCrLf & "  ...", ""), "") & _
          IIf(nDup > 0, vbCrLf & "Task Code ซ้ำในชีต (ข้าม) " & CStr(nDup) & " แถว", "") & _
          IIf(nNoDate > 0, vbCrLf & vbCrLf & "ไม่ได้ส่ง เพราะยังไม่ได้ใส่วันที่ " & CStr(nNoDate) & " งาน:" & noDate & IIf(nNoDate > 10, vbCrLf & "  ...", ""), "") & _
          IIf(Len(bkMsg) > 0, vbCrLf & vbCrLf & bkMsg, "") & _
@@ -1231,7 +1277,7 @@ Public Sub DP_SendChanges()
         End If
     Next i
 
-    ' จดเวลาที่ข้อมูลตรงกับระบบลงคอลัมน์ Z ของแถวที่ส่ง
+    ' จดเวลาที่ข้อมูลตรงกับระบบลงคอลัมน์ AA ของแถวที่ส่ง
     Set server = FetchPlan(sendCodes, ok)
     If ok Then
         EnsureSyncHeader ws, hdr, "Synced"
@@ -1373,6 +1419,114 @@ Private Function RpcJson(ByVal fn As String, ByVal body As String, ByRef ok As B
     End If
     RpcJson = r
 End Function
+
+' ---------------------------------------------------------------------------
+'  DP_AutoRun : ให้บอต Python (calplan_bot.py) เรียกผ่าน Excel COM  (ไม่มีหน้าต่างใดๆ)
+'    accessToken = โทเคนของบัญชีบอต (สิทธิ์ edit) ที่บอตเข้าสู่ระบบให้ ไม่ถูกบันทึกลงไฟล์
+'    runDate     = วันแรกของงาน "ปปปป-ดด-วว" (ว่าง = วันนี้) -> Plan!B1   endDate = วันสุดท้าย (ว่าง = วันเดียว) -> Plan!C1
+'    exportFile  = ไฟล์ export-tasks ที่บอตโหลดมา (ว่าง = ตามชีต Config)
+'  ขั้นตอน : ดึงงานล่าสุดลง Plan_Backup > ใส่ช่วงวันที่ที่ Plan!B1-C1 > ดึงแผน (เพิ่มเฉพาะงานที่ยังไม่มี) > ส่งงานใหม่ขึ้นระบบ
+'  คืน "OK|..." / "WARN|..." (ดึงแผนได้แต่ส่งไม่สำเร็จ) / "ERROR|..." และบันทึก 1 แถวในชีต Auto_Log
+' ---------------------------------------------------------------------------
+Public Function DP_AutoRun(ByVal accessToken As String, Optional ByVal runDate As String = "", Optional ByVal exportFile As String = "", Optional ByVal endDate As String = "") As String
+    Dim d As Date, d2 As Date, added As Long, skipped As Long, impMsg As String, sendMsg As String, res As String, bkMsg As String
+    Dim wsB As Worksheet, hdrB As Long
+    added = -1
+    On Error GoTo Fail
+    mSilent = True
+    mOverrideToken = Trim$(accessToken)
+    If Len(mOverrideToken) = 0 Then
+        res = "ERROR|ไม่ได้ส่ง access token"
+        GoTo Done
+    End If
+    If Len(Trim$(runDate)) = 0 Then
+        d = Date
+    ElseIf Not ParseIso(runDate, d) Then
+        res = "ERROR|วันที่ไม่ถูกต้อง: " & runDate
+        GoTo Done
+    End If
+    d = DateSerial(Year(d), Month(d), Day(d))
+    d2 = d
+    If Len(Trim$(endDate)) > 0 Then
+        If Not ParseIso(endDate, d2) Then
+            res = "ERROR|วันที่สิ้นสุดไม่ถูกต้อง: " & endDate
+            GoTo Done
+        End If
+        d2 = DateSerial(Year(d2), Month(d2), Day(d2))
+        If d2 < d Then d2 = d
+    End If
+    ScreenOn False
+    ' 1) งานล่าสุดจากเว็บ (ใช้กันเพิ่มงานซ้ำ แม้ไฟล์รอบก่อนไม่ได้บันทึก)
+    bkMsg = RefreshBackupAuto(wsB, hdrB)
+    ' 2) ดึงแผน
+    added = DP_ImportAuto(d, d2, exportFile, impMsg, skipped)
+    If added < 0 Then
+        res = "ERROR|ดึงแผนไม่สำเร็จ: " & impMsg
+        GoTo Done
+    End If
+    ' 3) ส่งงานใหม่
+    mLastTell = ""
+    DP_SendNew
+    sendMsg = mLastTell
+    If Not mSendOk Then
+        res = "WARN|ดึงแผนเพิ่ม " & CStr(added) & " แถว แต่ส่งงานขึ้นระบบไม่สำเร็จ: " & sendMsg
+        GoTo Done
+    End If
+    res = "OK|วันที่ " & IsoDate(d) & IIf(d2 > d, " ถึง " & IsoDate(d2), "") & " | เพิ่ม " & CStr(added) & " แถว | ข้าม (มีแล้ว) " & CStr(skipped) & " | ส่งขึ้นระบบ " & CStr(mSendCount) & " งาน" & _
+          " || ดึงแผน: " & impMsg & " || ส่งงาน: " & sendMsg
+    GoTo Done
+Fail:
+    res = "ERROR|" & Err.Description
+Done:
+    On Error Resume Next
+    res = Replace(Replace(res, vbCrLf, " / "), vbLf, " / ")
+    DP_LastAutoResult = res
+    AutoLog d, d2, exportFile, added, skipped, mSendCount, res, bkMsg
+    mSilent = False
+    mMute = False
+    mOverrideToken = ""
+    ScreenOn True
+    DP_AutoRun = res
+End Function
+
+Public Function DP_GetLastAutoResult() As String
+    DP_GetLastAutoResult = DP_LastAutoResult
+End Function
+
+' บันทึกผลแต่ละรอบในชีต Auto_Log (แถวใหม่ต่อท้าย สร้างชีตให้ถ้ายังไม่มี)
+Private Sub AutoLog(ByVal d As Date, ByVal d2 As Date, ByVal exportFile As String, ByVal added As Long, ByVal skipped As Long, ByVal sent As Long, ByVal res As String, ByVal bkMsg As String)
+    Dim ws As Worksheet, r As Long, st As String
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(AUTO_LOG_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.name = AUTO_LOG_SHEET
+        ws.Range("A1:I1").Value = Array("เวลาที่รัน", "วันที่งาน", "ไฟล์ export-tasks", "เพิ่ม (แถว)", "ข้าม (มีแล้ว)", "ส่งขึ้นระบบ (งาน)", "ผล", "รายละเอียด", "Plan_Backup")
+        ws.Range("A1:I1").Font.Bold = True
+        ws.Columns("A").ColumnWidth = 18
+        ws.Columns("B").ColumnWidth = 24
+        ws.Columns("C").ColumnWidth = 34
+        ws.Columns("D:F").ColumnWidth = 12
+        ws.Columns("G").ColumnWidth = 8
+        ws.Columns("H").ColumnWidth = 120
+        ws.Columns("I").ColumnWidth = 50
+    End If
+    r = ws.Cells(ws.rows.Count, 1).End(xlUp).row + 1
+    st = Split(res & "|", "|")(0)
+    ws.Cells(r, 1).NumberFormat = "yyyy-mm-dd hh:mm:ss"
+    ws.Cells(r, 1).Value = Now
+    ws.Cells(r, 2).NumberFormat = "@"
+    If d > 0 Then ws.Cells(r, 2).Value = IsoDate(d) & IIf(d2 > d, " ถึง " & IsoDate(d2), "")
+    ws.Cells(r, 3).Value = Mid$(exportFile, InStrRev(exportFile, "\") + 1)
+    If added >= 0 Then ws.Cells(r, 4).Value = added
+    ws.Cells(r, 5).Value = skipped
+    ws.Cells(r, 6).Value = sent
+    ws.Cells(r, 7).Value = st
+    ws.Cells(r, 8).Value = Left$(Mid$(res, Len(st) + 2), 32000)
+    ws.Cells(r, 9).Value = bkMsg
+    ws.Cells(r, 7).Font.Color = IIf(st = "OK", RGB(0, 128, 0), IIf(st = "WARN", RGB(200, 120, 0), RGB(200, 0, 0)))
+End Sub
 
 ' เลขลำดับ Task Code ถัดไปของวันที่ d ตามข้อมูลล่าสุดบนเว็บ (D20261016-04 -> 4)  ใช้โดย modImportCalendar
 ' ok = False เมื่อเชื่อมต่อไม่ได้/ยกเลิกการเข้าสู่ระบบ (มีหน้าต่างเข้าสู่ระบบถ้ายังไม่ได้เข้า)
@@ -1590,7 +1744,7 @@ Private Function StopInfo(ByVal f As Variant, ByVal n As Long, ByRef slot As Lon
     Dim k As Long, cnt As Long, nm As String
     slot = 0
     For k = 1 To 3
-        nm = Norm(CStr(f(12 + 3 * k)))
+        nm = Norm(CStr(f(13 + 3 * k)))
         If Len(nm) > 0 Then
             cnt = cnt + 1
             If cnt = n Then
@@ -1625,9 +1779,9 @@ Private Function BuildPickup(ByVal rows As Collection, ByVal plan As Collection,
         v(k, 3) = TxtVal(CStr(row(3)))
         f = PlanRow(plan, pidx, CStr(row(3)))
         If IsArray(f) Then
-            v(k, 4) = TxtVal(CStr(f(9)))
-            v(k, 5) = TxtVal(CStr(f(11)))
-            v(k, 6) = TxtVal(CStr(f(12)))
+            v(k, 4) = TxtVal(CStr(f(10)))
+            v(k, 5) = TxtVal(CStr(f(12)))
+            v(k, 6) = TxtVal(CStr(f(13)))
         End If
         v(k, 7) = TxtVal(CStr(row(4)))
         v(k, 8) = NumVal(CStr(row(5)))
@@ -1816,11 +1970,11 @@ Private Function BuildSummary(ByVal plan As Collection, ByVal pidx As Collection
         f = Fields(CStr(plan.Item(i)), NCOL + 2)
         v(i, 1) = TsVal(CStr(f(1)))
         v(i, 2) = TxtVal(CStr(f(0)))
-        v(i, 3) = TxtVal(CStr(f(11)))
-        v(i, 4) = TxtVal(CStr(f(12)))
-        v(i, 5) = TxtVal(CStr(f(9)))
-        v(i, 6) = TxtVal(CStr(f(14)))
-        v(i, 7) = TxtVal(CStr(f(24)))
+        v(i, 3) = TxtVal(CStr(f(12)))
+        v(i, 4) = TxtVal(CStr(f(13)))
+        v(i, 5) = TxtVal(CStr(f(10)))
+        v(i, 6) = TxtVal(CStr(f(15)))
+        v(i, 7) = TxtVal(CStr(f(25)))
         v(i, 8) = TsVal(CStr(ag(i, 1)))
         v(i, 9) = TxtVal(CStr(ag(i, 2)))
         v(i, 10) = TsVal(CStr(ag(i, 3)))
@@ -1832,7 +1986,7 @@ Private Function BuildSummary(ByVal plan As Collection, ByVal pidx As Collection
             If Len(nm) > 0 Then
                 v(i, c0) = TxtVal(nm)
                 If slot > 0 Then
-                    pt = HmNorm(CStr(f(5 + slot)))
+                    pt = HmNorm(CStr(f(6 + slot)))
                     If Len(pt) > 0 Then v(i, c0 + 1) = SafeText(pt)
                 End If
                 v(i, c0 + 2) = TsVal(CStr(ag(i, bs + 1)))
@@ -2579,11 +2733,11 @@ Private Function AutoPlaces(ByVal ws As Worksheet, ByVal hdr As Long, ByVal ws2 
             lastR = cur.Cells(cur.Rows.Count, 1).End(xlUp).Row
             For rr = h + 1 To lastR
                 For k = 0 To 2
-                    nm = Norm(CellText(cur, rr, 16 + 3 * k))
+                    nm = Norm(CellText(cur, rr, 17 + 3 * k))
                     If Len(nm) > 0 Then
                         key = PlaceKey(nm)
                         If HasKey(want, key) And Not HasKey(tried, key) Then
-                            url = MapUrlOf(cur, rr, 17 + 3 * k)
+                            url = MapUrlOf(cur, rr, 18 + 3 * k)
                             If Len(url) > 0 And nRes < 60 Then
                                 tried.Add "1", key
                                 co = CoordFromText(url)
@@ -2679,7 +2833,7 @@ Public Sub DP_SetupButtons()
     Set wsB = BackupSheet(True)
     MakeButtons ws
     If Not wsB Is Nothing Then MakeButtons wsB
-    Tell "สร้างปุ่ม 8 ปุ่มไว้ทางขวาของตาราง (ถัดจากคอลัมน์ Z) ในชีต " & PLAN_SHEET & " และ " & BACKUP_SHEET & " เรียบร้อย" & vbCrLf & _
+    Tell "สร้างปุ่ม 8 ปุ่มไว้ทางขวาของตาราง (ถัดจากคอลัมน์ AA) ในชีต " & PLAN_SHEET & " และ " & BACKUP_SHEET & " เรียบร้อย" & vbCrLf & _
          "ส่งงานใหม่ : พิมพ์ที่ชีต " & PLAN_SHEET & vbCrLf & "แก้งานเดิม : แก้ที่ชีต " & BACKUP_SHEET & " แล้วกด ส่งค่าที่แก้ไข" & vbCrLf & "ลากย้ายตำแหน่งปุ่มได้ตามต้องการ"
 End Sub
 

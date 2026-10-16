@@ -3,31 +3,38 @@ Option Explicit
 
 ' ============================================================================
 '  Delivery Tracking : ดึงแผนส่งของ (export-tasks) + ใบจองรถ (1Template_TB) ลงชีต Plan
-'  รุ่น 2026.10.15-c  (เติม Task Code อัตโนมัติ / งานต่างประเทศ / รอบเดียว / Task Status = Used)
-'  ต้องใช้คู่กับ modDeliveryPlan รุ่น y3 ขึ้นไป (ฟังก์ชัน DP_WebNextSeq)
+'  รุ่น 2026.10.16-e  (คอลัมน์ E = Type จาก export-tasks : oversea = งานต่างประเทศ / domestic = ในประเทศ
+'                     คอลัมน์ในชีต Plan ตั้งแต่ Transport เลื่อนขวา 1 คอลัมน์ / โหมดอัตโนมัติรับช่วงวันที่ B1-C1)
+'  รุ่น d : หยิบไฟล์ตามชีต Config ไม่ต้องเลือกไฟล์ / โหมดอัตโนมัติให้บอต Python
+'  รุ่น c : เติม Task Code อัตโนมัติ / งานต่างประเทศ / รอบเดียว / Task Status = Used
+'  ต้องใช้คู่กับ modDeliveryPlan รุ่น y5 ขึ้นไป (DP_WebNextSeq / DP_AutoRun / DP_EnsureTypeCol)
 '
 '  มาโคร (Alt+F8) :
 '    DP_ImportCalendar    ทำตามขั้นตอนใน Sheet1 ทั้งหมด
 '    DP_AddImportButton   สร้างปุ่ม "ดึงแผนจาก Calendar" ในชีต Plan (รันครั้งเดียว)
+'    DP_SetupConfig       สร้างชีต Config (โฟลเดอร์ / ชื่อไฟล์ต้นทาง) ดึงแผนครั้งแรกก็สร้างให้เอง
+'    DP_ImportAuto        ใช้โดย DP_AutoRun (บอต) ไม่มีหน้าต่าง
 '
 '  ขั้นตอน
-'    1) เลือกไฟล์ export-tasks  -> คัดลอกชีต Sheet1 (ค่าอย่างเดียว) มาไว้ชีต Calendar Plan แล้วปิดไฟล์
-'    2) เลือกไฟล์ 1Template_TB  -> คัดลอกชีต Input  (ค่าอย่างเดียว) มาไว้ชีต Transport Booking แล้วปิดไฟล์
+'    1) ไฟล์ export-tasks ล่าสุด (โฟลเดอร์ตามชีต Config) -> คัดลอกชีต Sheet1 (ค่าอย่างเดียว) มาไว้ชีต Calendar Plan แล้วปิดไฟล์
+'    2) ไฟล์ 1Template_TB ล่าสุด (โฟลเดอร์ตามชีต Config)  -> คัดลอกชีต Input  (ค่าอย่างเดียว) มาไว้ชีต Transport Booking แล้วปิดไฟล์
+'       (ไม่พบไฟล์ / ask_file = Yes = เปิดหน้าต่างให้เลือกเอง)
 '    3-4) กรองวันที่ตามชีต Plan ช่อง B1:C1 (C1 ว่าง = วันเดียว) และ Trans Type = outbound
-'    5) จัดข้อมูล -> ชีต Calendar Plan เหลือ 5 คอลัมน์ : Client Name | Date | Transport | Schedule | Detail
+'    5) จัดข้อมูล -> ชีต Calendar Plan เหลือ 6 คอลัมน์ : Client Name | Date | Transport | Schedule | Detail | Type
 '       Detail = ข้อความระหว่าง [ติ๊กถูกเขียว] กับ [สามเหลี่ยม] / [หัวใจม่วง] (หลายข้อความคั่นด้วย ", ")
-'    6) วางต่อท้ายชีต Plan : A->D, B->B, C->E, D->F, E->C  และเติม J-X จากชีต Transport Booking
+'    6) วางต่อท้ายชีต Plan : A->D, B->B, C->F, D->G, E->C, F->E  และเติม K-Y จากชีต Transport Booking
 '       (key = Client Name เทียบกับคอลัมน์ "อ้างอิง LN" ของใบจองรถ, จับคู่คอลัมน์ตามชื่อหัวตาราง)
 '    7) เติมข้อมูลเพิ่ม
 '       A  Task Code   = D + ปปปปดดวว + "-" + ลำดับ ต่อจากเลขล่าสุดบนเว็บ (และเลขที่มีในชีต Plan / Plan_Backup)
-'       งานต่างประเทศ (ดูจาก Client Name) : K ประเภทรถ / G Arrival Time 1 = Schedule + เวลา
+'       งานต่างประเทศ = Type เป็น oversea (ถ้า Type ว่าง ดูจาก Client Name แบบเดิม)
+'          L ประเภทรถ (ดูจาก Client Name) / H Arrival Time 1 = Schedule + เวลา
 '          DHL26000011             -> DHL       + 30 นาที
 '          LCL26000001 SI          -> LCL       + 30 นาที
 '          CL26000003 xxx 20FT     -> CL 20FT   + 2 ชม.
 '          CL26000077 xxx 40FT/40  -> CL 40FT   + 4 ชม.
 '          CL26000077 xxx 40HC     -> CL 40HC   + 4 ชม.
-'       O  รอบขนส่ง    = รอบเดียว (งานต่างประเทศเสมอ / งานในประเทศเมื่อใบจองรถไม่ได้ระบุ)
-'       Y  Task Status = Used ทุกแถว
+'       P  รอบขนส่ง    = รอบเดียว (งานต่างประเทศเสมอ / งานในประเทศเมื่อใบจองรถไม่ได้ระบุ)
+'       Z  Task Status = Used ทุกแถว
 '
 '  หมายเหตุ : หาคอลัมน์จากชื่อหัวตาราง ไม่ใช้ตัวอักษรคอลัมน์ ถ้าไฟล์ต้นทางสลับลำดับคอลัมน์ก็ยังทำงานได้
 ' ============================================================================
@@ -43,18 +50,29 @@ Private Const SKIP_CLIENT As String = "D/N NO"     ' Client Name ที่ขึ้นต้นด้วยค
 Private Const TB_KEY_HEAD As String = "อ้างอิง LN"
 Private Const TB_NOTE_HEAD As String = "หมายเหตุ"
 Private Const TB_CANCEL_WORD As String = "ยกเลิก"
-Private Const LOOKUP_FIRST As Long = 10    ' คอลัมน์ J ของชีต Plan
-Private Const LOOKUP_LAST As Long = 24     ' คอลัมน์ X ของชีต Plan
-Private Const PLAN_LASTCOL As Long = 26    ' คอลัมน์ Z
+Private Const LOOKUP_FIRST As Long = 11    ' คอลัมน์ K ของชีต Plan
+Private Const LOOKUP_LAST As Long = 25     ' คอลัมน์ Y ของชีต Plan
+Private Const PLAN_LASTCOL As Long = 27    ' คอลัมน์ AA
 Private Const LIST_MAX As Long = 15        ' จำนวนรายการสูงสุดที่แสดงในข้อความสรุป
-Private Const COL_ARR1 As Long = 7         ' G Arrival Time 1
-Private Const COL_VTYPE As Long = 11       ' K ประเภทรถ
-Private Const COL_ROUND As Long = 15       ' O รอบขนส่ง
-Private Const COL_STATUS As Long = 25      ' Y Task Status
-Private Const OUT_LAST As Long = 25        ' เขียนลงชีต Plan ถึงคอลัมน์ Y
+Private Const COL_TYPE As Long = 5         ' E Type (domestic / oversea)
+Private Const COL_SCHED As Long = 7        ' G Schedule
+Private Const COL_ARR1 As Long = 8         ' H Arrival Time 1
+Private Const COL_VTYPE As Long = 12       ' L ประเภทรถ
+Private Const COL_ROUND As Long = 16       ' P รอบขนส่ง
+Private Const COL_STATUS As Long = 26      ' Z Task Status
+Private Const OUT_LAST As Long = 26        ' เขียนลงชีต Plan ถึงคอลัมน์ Z
+Private Const CAL_NCOL As Long = 6         ' คอลัมน์ในชีต Calendar Plan หลังจัดข้อมูล
 Private Const ROUND_ONE As String = "รอบเดียว"
 Private Const STATUS_NEW As String = "Used"
 Private Const BACKUP_SHEET As String = "Plan_Backup"
+Private Const CFG_SHEET As String = "Config"
+
+' โหมดอัตโนมัติ (DP_ImportAuto) : ไม่มีหน้าต่าง ข้อความเก็บใน mAutoMsg
+Private mAuto As Boolean
+Private mAutoExport As String
+Private mAutoMsg As String
+Private mAutoAdded As Long
+Private mAutoSkip As Long
 ' เวลาที่รถต่างประเทศควรถึง (นาที นับจาก Schedule) : แก้ตัวเลขตรงนี้ได้
 Private Const MIN_DHL As Long = 30
 Private Const MIN_LCL As Long = 30
@@ -68,7 +86,7 @@ Private Const MIN_CL40HC As Long = 240
 Public Sub DP_ImportCalendar()
     Dim wsPlan As Worksheet, wsCal As Worksheet, wsTb As Worksheet
     Dim hdr As Long, d1 As Date, d2 As Date, tmp As Date
-    Dim fCal As Variant, fTb As Variant
+    Dim fCal As String, fTb As String, nSkip As Long, sSkip As String
     Dim cal As Variant, nCal As Long
     Dim nExist As Long, startRow As Long, i As Long, c As Long
     Dim outP() As Variant
@@ -86,6 +104,9 @@ Public Sub DP_ImportCalendar()
         Tell "ไม่พบชีต " & PLAN_SHEET & " ในไฟล์นี้", True
         Exit Sub
     End If
+    ' ไฟล์รุ่นก่อน (ยังไม่มีคอลัมน์ E = Type) : แทรกคอลัมน์ให้ทั้งชีต Plan และ Plan_Backup ก่อน
+    If Not DP_EnsureTypeCol(wsPlan) Then Exit Sub
+    If Not DP_EnsureTypeCol(FindSheet(BACKUP_SHEET)) Then Exit Sub
     hdr = PlanHeaderRow(wsPlan)
     If hdr = 0 Then
         Tell "ไม่พบหัวตารางในชีต " & PLAN_SHEET & " (คอลัมน์ A ต้องมีคำว่า Task Code)", True
@@ -105,20 +126,21 @@ Public Sub DP_ImportCalendar()
     rangeText = Format$(d1, "yyyy-mm-dd") & IIf(d2 > d1, " ถึง " & Format$(d2, "yyyy-mm-dd"), "")
 
     ' ---- เลือกไฟล์ต้นทางทั้ง 2 ไฟล์ตอนเริ่มต้น ----
-    fCal = Application.GetOpenFilename("Excel Files (*.xls*),*.xls*", , "1/2 เลือกไฟล์ export-tasks (ข้อมูลอยู่ในชีต Sheet1)")
-    If VarType(fCal) = vbBoolean Then Exit Sub
-    fTb = Application.GetOpenFilename("Excel Files (*.xls*),*.xls*", , "2/2 เลือกไฟล์ 1Template_TB (ข้อมูลอยู่ในชีต Input)")
-    If VarType(fTb) = vbBoolean Then Exit Sub
+    ' (โฟลเดอร์ / ชื่อไฟล์ตามชีต Config : หยิบไฟล์ล่าสุดให้เอง ไม่พบ = เปิดหน้าต่างให้เลือก)
+    fCal = PickSource("export")
+    If Len(fCal) = 0 Then Exit Sub
+    fTb = PickSource("tb")
+    If Len(fTb) = 0 Then Exit Sub
 
     On Error GoTo Fail
     Application.ScreenUpdating = False
 
     ' ---- 1) 2) คัดลอกข้อมูลจากไฟล์ต้นทาง (ค่าอย่างเดียว) ----
     Application.StatusBar = "กำลังคัดลอกข้อมูลจากไฟล์ export-tasks ..."
-    Set wsCal = CopyFromFile(CStr(fCal), SRC_CAL_SHEET, CAL_SHEET)
+    Set wsCal = CopyFromFile(fCal, SRC_CAL_SHEET, CAL_SHEET)
     If wsCal Is Nothing Then GoTo Done
     Application.StatusBar = "กำลังคัดลอกข้อมูลจากไฟล์ใบจองรถ ..."
-    Set wsTb = CopyFromFile(CStr(fTb), SRC_TB_SHEET, TB_SHEET)
+    Set wsTb = CopyFromFile(fTb, SRC_TB_SHEET, TB_SHEET)
     If wsTb Is Nothing Then GoTo Done
 
     ' ---- 3) 4) 5) กรองและจัดข้อมูล แล้วเขียนกลับชีต Calendar Plan ----
@@ -127,12 +149,24 @@ Public Sub DP_ImportCalendar()
     WriteCalendar wsCal, cal, nCal
     If nCal = 0 Then
         Application.ScreenUpdating = True
+        If mAuto Then mAutoAdded = 0
         Tell "ไม่พบงาน " & TRANS_TYPE & " วันที่ " & rangeText & " ในไฟล์ export-tasks" & vbCrLf & "(ยังไม่ได้เพิ่มข้อมูลลงชีต " & PLAN_SHEET & ")", True
         GoTo Done
     End If
 
     ' ---- กันการเพิ่มซ้ำ : ถ้าชีต Plan มีงานวันที่นี้อยู่แล้ว ให้ถามก่อน ----
     nExist = CountPlanDates(wsPlan, hdr, d1, d2)
+    If mAuto Then
+        ' โหมดอัตโนมัติ : ไม่ถาม เพิ่มเฉพาะงานที่ยังไม่มีในชีต Plan / Plan_Backup
+        nExist = 0
+        nSkip = DedupeCal(cal, nCal, wsPlan, hdr, d1, d2, sSkip)
+        mAutoSkip = nSkip
+        If nCal = 0 Then
+            mAutoAdded = 0
+            Tell "ไม่มีงานใหม่ วันที่ " & rangeText & " (มีอยู่แล้ว " & CStr(nSkip) & " งาน)"
+            GoTo Done
+        End If
+    End If
     If nExist > 0 Then
         Application.ScreenUpdating = True
         If MsgBox("ชีต " & PLAN_SHEET & " มีงานวันที่ " & rangeText & " อยู่แล้ว " & CStr(nExist) & " แถว" & vbCrLf & vbCrLf & _
@@ -181,10 +215,16 @@ Public Sub DP_ImportCalendar()
         outP(i, 2) = cal(i + 1, 2)      ' Date
         outP(i, 3) = cal(i + 1, 5)      ' Detail
         outP(i, 4) = cal(i + 1, 1)      ' Client Name
-        outP(i, 5) = cal(i + 1, 3)      ' Transport
-        outP(i, 6) = cal(i + 1, 4)      ' Schedule
+        outP(i, COL_TYPE) = cal(i + 1, 6)   ' Type
+        outP(i, 6) = cal(i + 1, 3)      ' Transport
+        outP(i, COL_SCHED) = cal(i + 1, 4)  ' Schedule
 
+        ' งานต่างประเทศ : ยึด Type (oversea / domestic) ; Type ว่าง = ดูจาก Client Name
         isIntl(i) = IntlType(SafeStr(cal(i + 1, 1)), vType, vMin)
+        Select Case JobKind(cal(i + 1, 6))
+            Case 1: isIntl(i) = True
+            Case 2: isIntl(i) = False: vType = "": vMin = 0
+        End Select
         key = KeyOf(cal(i + 1, 1))
         If Len(key) = 0 Then
             nBlank = nBlank + 1
@@ -216,8 +256,8 @@ Public Sub DP_ImportCalendar()
                 If nUnk <= LIST_MAX Then sUnk = sUnk & vbCrLf & "  " & CStr(cal(i + 1, 1))
             Else
                 outP(i, COL_VTYPE) = vType
-                If VarType(outP(i, 6)) = vbDouble Then
-                    outP(i, COL_ARR1) = AddMinutes(CDbl(outP(i, 6)), vMin)
+                If VarType(outP(i, COL_SCHED)) = vbDouble Then
+                    outP(i, COL_ARR1) = AddMinutes(CDbl(outP(i, COL_SCHED)), vMin)
                 Else
                     nNoSch = nNoSch + 1
                     If nNoSch <= LIST_MAX Then sNoSch = sNoSch & vbCrLf & "  " & CStr(cal(i + 1, 1))
@@ -238,25 +278,29 @@ Public Sub DP_ImportCalendar()
     With wsPlan
         .Range(.Cells(startRow, 1), .Cells(startRow + nCal - 1, 1)).NumberFormat = "@"
         .Range(.Cells(startRow, 2), .Cells(startRow + nCal - 1, 2)).NumberFormat = "yyyy-mm-dd"
-        .Range(.Cells(startRow, 6), .Cells(startRow + nCal - 1, 9)).NumberFormat = "hh:mm"
-        .Range(.Cells(startRow, 12), .Cells(startRow + nCal - 1, 12)).NumberFormat = "@"
-        .Range(.Cells(startRow, 14), .Cells(startRow + nCal - 1, 14)).NumberFormat = "@"
+        .Range(.Cells(startRow, COL_TYPE), .Cells(startRow + nCal - 1, COL_TYPE)).NumberFormat = "@"
+        .Range(.Cells(startRow, COL_SCHED), .Cells(startRow + nCal - 1, COL_SCHED + 3)).NumberFormat = "hh:mm"
+        .Range(.Cells(startRow, 13), .Cells(startRow + nCal - 1, 13)).NumberFormat = "@"
+        .Range(.Cells(startRow, 15), .Cells(startRow + nCal - 1, 15)).NumberFormat = "@"
         .Range(.Cells(startRow, 1), .Cells(startRow + nCal - 1, OUT_LAST)).Value = outP
     End With
 
     Application.StatusBar = False
     Application.ScreenUpdating = True
     On Error Resume Next
-    Application.GoTo wsPlan.Cells(startRow, 1), False
+    If Not mAuto Then Application.GoTo wsPlan.Cells(startRow, 1), False
     On Error GoTo 0
+    If mAuto Then mAutoAdded = nCal
 
     Tell "เพิ่มงานลงชีต " & PLAN_SHEET & " " & CStr(nCal) & " แถว (แถว " & CStr(startRow) & "-" & CStr(startRow + nCal - 1) & ")" & vbCrLf & _
          "วันที่ " & rangeText & " / " & TRANS_TYPE & vbCrLf & codeMsg & _
+         vbCrLf & "ไฟล์ : " & FileNameOf(fCal) & " + " & FileNameOf(fTb) & _
+         IIf(nSkip > 0, vbCrLf & "มีอยู่แล้ว (ข้าม) " & CStr(nSkip) & " งาน:" & sSkip & IIf(nSkip > LIST_MAX, vbCrLf & "  ...", ""), "") & _
          IIf(nIntl > 0, vbCrLf & "งานต่างประเทศ " & CStr(nIntl) & " งาน (เติมประเภทรถ / Arrival Time 1 / รอบเดียว ให้แล้ว)", "") & _
-         IIf(nUnk > 0, vbCrLf & vbCrLf & "งาน CL ที่ไม่ทราบขนาดตู้ " & CStr(nUnk) & " งาน (กรุณาใส่ประเภทรถ CL 20FT / CL 40FT / CL 40HC และ Arrival Time 1 เอง):" & sUnk & IIf(nUnk > LIST_MAX, vbCrLf & "  ...", ""), "") & _
+         IIf(nUnk > 0, vbCrLf & vbCrLf & "งานต่างประเทศที่ไม่ทราบประเภทรถ " & CStr(nUnk) & " งาน (กรุณาใส่ประเภทรถ DHL / LCL / CL 20FT / CL 40FT / CL 40HC และ Arrival Time 1 เอง):" & sUnk & IIf(nUnk > LIST_MAX, vbCrLf & "  ...", ""), "") & _
          IIf(nNoSch > 0, vbCrLf & vbCrLf & "งานต่างประเทศที่ไม่มี Schedule " & CStr(nNoSch) & " งาน (คำนวณ Arrival Time 1 ไม่ได้ กรุณาใส่เอง):" & sNoSch & IIf(nNoSch > LIST_MAX, vbCrLf & "  ...", ""), "") & _
-         IIf(nNo > 0, vbCrLf & vbCrLf & "ไม่พบใบจองรถ " & CStr(nNo) & " งาน (J-X ว่าง):" & sNo & IIf(nNo > LIST_MAX, vbCrLf & "  ...", ""), "") & _
-         IIf(nCan > 0, vbCrLf & vbCrLf & "ใบจองรถถูกยกเลิก " & CStr(nCan) & " งาน (J-X ว่าง):" & sCan & IIf(nCan > LIST_MAX, vbCrLf & "  ...", ""), "") & _
+         IIf(nNo > 0, vbCrLf & vbCrLf & "ไม่พบใบจองรถ " & CStr(nNo) & " งาน (K-Y ว่าง):" & sNo & IIf(nNo > LIST_MAX, vbCrLf & "  ...", ""), "") & _
+         IIf(nCan > 0, vbCrLf & vbCrLf & "ใบจองรถถูกยกเลิก " & CStr(nCan) & " งาน (K-Y ว่าง):" & sCan & IIf(nCan > LIST_MAX, vbCrLf & "  ...", ""), "") & _
          IIf(nMulti > 0, vbCrLf & vbCrLf & "มีใบจองรถมากกว่า 1 ใบ (ใช้ใบล่าสุด) " & CStr(nMulti) & " งาน:" & sMulti & IIf(nMulti > LIST_MAX, vbCrLf & "  ...", ""), "") & _
          IIf(nBlank > 0, vbCrLf & vbCrLf & "ไม่มี Client Name (ค้นใบจองรถไม่ได้) " & CStr(nBlank) & " งาน", "") & _
          IIf(Len(missHead) > 0, vbCrLf & vbCrLf & "ไม่พบหัวตารางนี้ในใบจองรถ (คอลัมน์ว่าง):" & missHead, "") & _
@@ -275,7 +319,7 @@ Fail:
     Tell "เกิดข้อผิดพลาด: " & Err.Description, True
 End Sub
 
-' ปุ่มในชีต Plan (ใต้ปุ่มเดิม 8 ปุ่มทางขวาของคอลัมน์ Z)
+' ปุ่มในชีต Plan (ใต้ปุ่มเดิม 8 ปุ่มทางขวาของคอลัมน์ AA)
 Public Sub DP_AddImportButton()
     Dim ws As Worksheet, b As Object, i As Long
     Set ws = FindSheet(PLAN_SHEET)
@@ -370,7 +414,7 @@ End Function
 ' ---------------------------------------------------------------------------
 Private Function BuildCalendar(ByVal ws As Worksheet, ByVal d1 As Date, ByVal d2 As Date, ByRef out As Variant, ByRef n As Long) As Boolean
     Dim a As Variant, h As Long, r As Long, d As Date
-    Dim cClient As Long, cDt As Long, cType As Long, cTrans As Long, cSch As Long, cDet As Long
+    Dim cClient As Long, cDt As Long, cType As Long, cTrans As Long, cSch As Long, cDet As Long, cJob As Long
     Dim miss As String, keep() As Long, k As Long
 
     a = ws.UsedRange.Value
@@ -389,6 +433,7 @@ Private Function BuildCalendar(ByVal ws As Worksheet, ByVal d1 As Date, ByVal d2
     cTrans = FindCol(a, h, "Transport")
     cSch = FindCol(a, h, "Schedule")
     cDet = FindCol(a, h, "Detail")
+    cJob = FindCol(a, h, "Type")          ' domestic / oversea (ไม่มีคอลัมน์นี้ = ว่าง ใช้ Client Name แยกงานต่างประเทศ)
     If cDt = 0 Then miss = miss & " Date"
     If cType = 0 Then miss = miss & " ""Trans Type"""
     If cTrans = 0 Then miss = miss & " Transport"
@@ -414,12 +459,13 @@ Private Function BuildCalendar(ByVal ws As Worksheet, ByVal d1 As Date, ByVal d2
     Next r
 
     n = k
-    ReDim out(1 To n + 1, 1 To 5)
+    ReDim out(1 To n + 1, 1 To CAL_NCOL)
     out(1, 1) = "Client Name"
     out(1, 2) = "Date"
     out(1, 3) = "Transport"
     out(1, 4) = "Schedule"
     out(1, 5) = "Detail"
+    out(1, 6) = "Type"
     For k = 1 To n
         r = keep(k)
         ParseYMD a(r, cDt), d
@@ -428,6 +474,7 @@ Private Function BuildCalendar(ByVal ws As Worksheet, ByVal d1 As Date, ByVal d2
         out(k + 1, 3) = Flatten(SafeStr(a(r, cTrans)), False)
         out(k + 1, 4) = HmValue(a(r, cSch))
         out(k + 1, 5) = CleanDetail(SafeStr(a(r, cDet)))
+        If cJob > 0 Then out(k + 1, 6) = LCase$(Trim$(SafeStr(a(r, cJob))))
     Next k
     BuildCalendar = True
 End Function
@@ -442,16 +489,17 @@ End Function
 
 Private Sub WriteCalendar(ByVal ws As Worksheet, ByVal out As Variant, ByVal n As Long)
     ws.Cells.Clear
-    ws.Range("A:A,C:C,E:E").NumberFormat = "@"
+    ws.Range("A:A,C:C,E:F").NumberFormat = "@"
     ws.Range("B:B").NumberFormat = "yyyy-mm-dd"
     ws.Range("D:D").NumberFormat = "hh:mm"
-    ws.Range("A1").Resize(n + 1, 5).Value = out
-    ws.Range("A1:E1").Font.Bold = True
+    ws.Range("A1").Resize(n + 1, CAL_NCOL).Value = out
+    ws.Range("A1:F1").Font.Bold = True
     ws.Columns("A").ColumnWidth = 22
     ws.Columns("B").ColumnWidth = 12
     ws.Columns("C").ColumnWidth = 45
     ws.Columns("D").ColumnWidth = 9
     ws.Columns("E").ColumnWidth = 80
+    ws.Columns("F").ColumnWidth = 11
 End Sub
 
 ' ---------------------------------------------------------------------------
@@ -521,9 +569,17 @@ End Function
 '  ตัวช่วย
 ' ---------------------------------------------------------------------------
 Private Sub Tell(ByVal msg As String, Optional ByVal warn As Boolean = False)
+    If mAuto Then                                   ' โหมดอัตโนมัติ : เก็บข้อความ ไม่แสดงหน้าต่าง
+        mAutoMsg = mAutoMsg & IIf(Len(mAutoMsg) > 0, vbCrLf, "") & msg
+        Exit Sub
+    End If
     Application.ScreenUpdating = True
     MsgBox msg, IIf(warn, vbExclamation, vbInformation), APP_TITLE
 End Sub
+
+Private Function FileNameOf(ByVal p As String) As String
+    FileNameOf = Mid$(p, InStrRev(p, "\") + 1)
+End Function
 
 Private Function FindSheet(ByVal name As String) As Worksheet
     On Error Resume Next
@@ -749,6 +805,10 @@ Private Function FillTaskCodes(ByRef outP() As Variant, ByVal n As Long, ByVal w
             End If
         End If
     Next i
+    If webFail And mAuto Then
+        Tell "เช็กเลข Task Code ล่าสุดจากเว็บไม่ได้ : ยกเลิก ไม่เพิ่มแถว", True
+        Exit Function
+    End If
     If webFail Then
         Application.ScreenUpdating = True
         If MsgBox("เช็กเลข Task Code ล่าสุดจากเว็บไม่ได้ (ยังไม่ได้เข้าสู่ระบบ หรือไม่มีอินเทอร์เน็ต)" & vbCrLf & vbCrLf & _
@@ -807,6 +867,246 @@ End Function
 
 Private Function SeqOf(ByVal seq As Object, ByVal d As Date) As Long
     SeqOf = SeqKey(seq, DayKey(d))
+End Function
+
+' ===========================================================================
+'  โหมดอัตโนมัติ + ชีต Config  (รุ่น d)
+' ===========================================================================
+'  เรียกจาก modDeliveryPlan.DP_AutoRun (บอต Python) : ไม่มีหน้าต่างใดๆ
+'  d1 - d2 = ช่วงวันที่งาน (ใส่ Plan!B1 และ C1 ; วันเดียว = C1 ว่าง)
+'  exportFile = ไฟล์ export-tasks ที่บอตโหลดมา (ว่าง = หาไฟล์ล่าสุดตามชีต Config)
+'  คืน จำนวนแถวที่เพิ่ม (0 = ไม่มีงานใหม่) / -1 = ผิดพลาด ; msg = สรุปผล ; skipped = งานที่มีอยู่แล้ว (ข้าม)
+Public Function DP_ImportAuto(ByVal d As Date, ByVal d2 As Date, ByVal exportFile As String, ByRef msg As String, ByRef skipped As Long) As Long
+    Dim ws As Worksheet
+    mAuto = True
+    mAutoExport = exportFile
+    mAutoMsg = ""
+    mAutoAdded = -1
+    mAutoSkip = 0
+    On Error GoTo Fail
+    Set ws = FindSheet(PLAN_SHEET)
+    If ws Is Nothing Then
+        mAutoMsg = "ไม่พบชีต " & PLAN_SHEET
+        GoTo Done
+    End If
+    d = DateSerial(Year(d), Month(d), Day(d))
+    d2 = DateSerial(Year(d2), Month(d2), Day(d2))
+    ws.Range("B1").Value = d
+    If d2 > d Then
+        ws.Range("C1").NumberFormat = ws.Range("B1").NumberFormat
+        ws.Range("C1").Value = d2
+    Else
+        ws.Range("C1").ClearContents
+    End If
+    DP_ImportCalendar
+    GoTo Done
+Fail:
+    mAutoMsg = mAutoMsg & IIf(Len(mAutoMsg) > 0, " / ", "") & "เกิดข้อผิดพลาด: " & Err.Description
+    mAutoAdded = -1
+Done:
+    On Error Resume Next
+    DP_ImportAuto = mAutoAdded
+    msg = mAutoMsg
+    skipped = mAutoSkip
+    mAuto = False
+    mAutoExport = ""
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+End Function
+
+' สร้าง / ตรวจชีต Config (รันเองได้จาก Alt+F8 ; ดึงแผนครั้งแรกก็สร้างให้เอง)
+Public Sub DP_SetupConfig()
+    Dim ws As Worksheet
+    Set ws = EnsureConfig()
+    If ws Is Nothing Then Exit Sub
+    ws.Activate
+    Tell "ชีต " & CFG_SHEET & " พร้อมใช้งาน" & vbCrLf & vbCrLf & _
+         "ดึงแผนจะหยิบไฟล์ล่าสุดที่ชื่อขึ้นต้นตามที่ตั้งไว้ในโฟลเดอร์นั้นให้เอง ไม่ต้องเลือกไฟล์" & vbCrLf & _
+         "ถ้าต้องการเลือกไฟล์เองทุกครั้ง ให้ใส่ Yes ในช่อง ask_file"
+End Sub
+
+Private Function EnsureConfig() As Worksheet
+    Dim ws As Worksheet, prof As String, rows As Variant, i As Long, r As Long
+    Set ws = FindSheet(CFG_SHEET)
+    prof = Environ$("USERPROFILE")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.name = CFG_SHEET
+        ws.Range("A1:C1").Value = Array("Key", "Value", "คำอธิบาย")
+        ws.Range("A1:C1").Font.Bold = True
+        ws.Columns("A").ColumnWidth = 16
+        ws.Columns("B").ColumnWidth = 95
+        ws.Columns("C").ColumnWidth = 70
+        ws.Columns("B").NumberFormat = "@"
+    End If
+    rows = Array( _
+        Array("export_folder", prof & "\Downloads", "โฟลเดอร์ไฟล์ export-tasks ที่โหลดจากเว็บ Calendar Plan (กดมือ = Downloads ; บอตส่งชื่อไฟล์มาให้เอง)"), _
+        Array("export_prefix", "export-tasks", "ชื่อไฟล์ขึ้นต้นด้วย (ใช้ไฟล์ล่าสุด)"), _
+        Array("tb_folder", prof & "\SCMREF (THAILAND) CO., LTD\Sales Domestic - เอกสาร\4.Transport Booking Confirmation(TB)", "โฟลเดอร์ใบจองรถ"), _
+        Array("tb_prefix", "1Template_TB", "ชื่อไฟล์ใบจองรถขึ้นต้นด้วย (ใช้ไฟล์ล่าสุด)"), _
+        Array("ask_file", "No", "Yes = ให้เลือกไฟล์เองทุกครั้ง ; No = หยิบไฟล์ล่าสุดตามโฟลเดอร์ด้านบนให้เอง"))
+    For i = LBound(rows) To UBound(rows)
+        r = CfgRow(ws, CStr(rows(i)(0)))
+        If r = 0 Then
+            r = ws.Cells(ws.rows.Count, 1).End(xlUp).row + 1
+            ws.Cells(r, 1).Value = rows(i)(0)
+            ws.Cells(r, 2).Value = rows(i)(1)
+            ws.Cells(r, 3).Value = rows(i)(2)
+        End If
+    Next i
+    Set EnsureConfig = ws
+End Function
+
+Private Function CfgRow(ByVal ws As Worksheet, ByVal key As String) As Long
+    Dim r As Long, lr As Long
+    lr = ws.Cells(ws.rows.Count, 1).End(xlUp).row
+    For r = 2 To lr
+        If StrComp(Trim$(CStr(ws.Cells(r, 1).Value)), key, vbTextCompare) = 0 Then
+            CfgRow = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Function CfgGet(ByVal key As String) As String
+    Dim ws As Worksheet, r As Long
+    Set ws = EnsureConfig()
+    If ws Is Nothing Then Exit Function
+    r = CfgRow(ws, key)
+    If r > 0 Then CfgGet = Trim$(SafeStr(ws.Cells(r, 2).Value))
+End Function
+
+' หาไฟล์ต้นทาง : kind = "export" / "tb"  คืน path เต็ม หรือ "" = ยกเลิก / ไม่พบ
+Private Function PickSource(ByVal kind As String) As String
+    Dim folder As String, prefix As String, f As String, title As String, fd As Object
+    If kind = "export" And Len(mAutoExport) > 0 Then
+        If CreateObject("Scripting.FileSystemObject").FileExists(mAutoExport) Then
+            PickSource = mAutoExport
+        Else
+            Tell "ไม่พบไฟล์ที่บอตส่งมา: " & mAutoExport, True
+        End If
+        Exit Function
+    End If
+    folder = CfgGet(kind & "_folder")
+    prefix = CfgGet(kind & "_prefix")
+    If kind = "export" Then
+        title = "1/2 เลือกไฟล์ export-tasks (ข้อมูลอยู่ในชีต Sheet1)"
+        If Len(prefix) = 0 Then prefix = "export-tasks"
+        If Len(folder) = 0 Then folder = Environ$("USERPROFILE") & "\Downloads"
+    Else
+        title = "2/2 เลือกไฟล์ 1Template_TB (ข้อมูลอยู่ในชีต Input)"
+        If Len(prefix) = 0 Then prefix = "1Template_TB"
+    End If
+    If mAuto Or StrComp(CfgGet("ask_file"), "Yes", vbTextCompare) <> 0 Then
+        f = LatestFile(folder, prefix)
+        If Len(f) > 0 Then
+            PickSource = f
+            Exit Function
+        End If
+        If mAuto Then
+            Tell "ไม่พบไฟล์ " & prefix & "*.xls* ในโฟลเดอร์ " & folder & " (ตั้งค่าที่ชีต " & CFG_SHEET & ")", True
+            Exit Function
+        End If
+    End If
+    ' เลือกเอง (เปิดที่โฟลเดอร์ตาม Config)
+    Set fd = Application.FileDialog(3)                        ' msoFileDialogFilePicker
+    fd.Title = title
+    fd.AllowMultiSelect = False
+    fd.Filters.Clear
+    fd.Filters.Add "Excel Files", "*.xls*"
+    If Len(folder) > 0 Then fd.InitialFileName = folder & "\" & prefix & "*"
+    If fd.Show = -1 Then PickSource = fd.SelectedItems(1)
+End Function
+
+' ไฟล์ล่าสุด (แก้ไขล่าสุด) ที่ชื่อขึ้นต้นด้วย prefix และนามสกุล .xls* (ใช้ FileSystemObject รองรับชื่อโฟลเดอร์ภาษาไทย)
+Private Function LatestFile(ByVal folder As String, ByVal prefix As String) As String
+    Dim fso As Object, fl As Object, best As Object, nm As String
+    On Error GoTo Done
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Len(folder) = 0 Then Exit Function
+    If Not fso.FolderExists(folder) Then Exit Function
+    For Each fl In fso.GetFolder(folder).Files
+        nm = LCase$(fl.name)
+        If Left$(nm, Len(prefix)) = LCase$(prefix) And LCase$(fso.GetExtensionName(nm)) Like "xls*" And Left$(nm, 2) <> "~$" Then
+            If best Is Nothing Then
+                Set best = fl
+            ElseIf fl.DateLastModified > best.DateLastModified Then
+                Set best = fl
+            End If
+        End If
+    Next fl
+    If Not best Is Nothing Then LatestFile = best.Path
+Done:
+End Function
+
+' ---------------------------------------------------------------------------
+'  โหมดอัตโนมัติ : ตัดงานที่มีอยู่แล้วออก (เทียบ วันที่ + Client Name + Schedule + Detail กับชีต Plan และ Plan_Backup)
+'  งานที่ซ้ำกันในไฟล์เอง (เช่น 2 เที่ยวเหมือนกัน) ยังเพิ่มครบตามจำนวนที่เกินของเดิม
+' ---------------------------------------------------------------------------
+Private Function DedupeCal(ByRef cal As Variant, ByRef nCal As Long, ByVal wsPlan As Worksheet, ByVal hdr As Long, ByVal d1 As Date, ByVal d2 As Date, ByRef sSkip As String) As Long
+    Dim have As Object, wsB As Worksheet, k As String, i As Long, n As Long, c As Long, out() As Variant, nSkip As Long
+    Set have = CreateObject("Scripting.Dictionary")
+    CountKeys wsPlan, hdr, d1, d2, have
+    Set wsB = FindSheet(BACKUP_SHEET)
+    If Not wsB Is Nothing Then CountKeys wsB, PlanHeaderRow(wsB), d1, d2, have
+    ReDim out(1 To nCal + 1, 1 To CAL_NCOL)
+    For c = 1 To CAL_NCOL
+        out(1, c) = cal(1, c)
+    Next c
+    For i = 1 To nCal
+        k = RowKey(cal(i + 1, 2), cal(i + 1, 1), cal(i + 1, 4), cal(i + 1, 5))
+        If have.Exists(k) Then
+            If have(k) > 0 Then
+                have(k) = have(k) - 1
+                nSkip = nSkip + 1
+                If nSkip <= LIST_MAX Then sSkip = sSkip & vbCrLf & "  " & CStr(cal(i + 1, 1))
+                GoTo NextI
+            End If
+        End If
+        n = n + 1
+        For c = 1 To CAL_NCOL
+            out(n + 1, c) = cal(i + 1, c)
+        Next c
+NextI:
+    Next i
+    cal = out
+    nCal = n
+    DedupeCal = nSkip
+End Function
+
+Private Sub CountKeys(ByVal ws As Worksheet, ByVal hdr As Long, ByVal d1 As Date, ByVal d2 As Date, ByVal have As Object)
+    Dim a As Variant, r As Long, lr As Long, d As Date, k As String
+    If hdr = 0 Then Exit Sub
+    lr = lastRow(ws, hdr)
+    If lr <= hdr Then Exit Sub
+    a = ws.Range(ws.Cells(hdr + 1, 1), ws.Cells(lr + 1, COL_SCHED)).Value
+    For r = 1 To UBound(a, 1)
+        If ParseYMD(a(r, 2), d) Then
+            If d >= d1 And d <= d2 Then
+                k = RowKey(a(r, 2), a(r, 4), a(r, COL_SCHED), a(r, 3))
+                have(k) = have(k) + 1
+            End If
+        End If
+    Next r
+End Sub
+
+Private Function RowKey(ByVal dt As Variant, ByVal client As Variant, ByVal sched As Variant, ByVal detail As Variant) As String
+    Dim d As Date, s As Variant, ds As String
+    If ParseYMD(dt, d) Then ds = Format$(d, "yyyymmdd")
+    s = HmValue(sched)
+    If VarType(s) = vbDouble Then s = Format$(CDate(s), "hh:mm") Else s = Trim$(SafeStr(s))
+    RowKey = ds & "|" & KeyOf(client) & "|" & s & "|" & LCase$(Left$(Replace(Flatten(SafeStr(detail), True), " ", ""), 80))
+End Function
+
+' Type จาก export-tasks : 1 = ต่างประเทศ (oversea) / 2 = ในประเทศ (domestic) / 0 = ว่างหรือไม่รู้จัก
+Private Function JobKind(ByVal v As Variant) As Long
+    Dim s As String
+    s = LCase$(Trim$(SafeStr(v)))
+    If s Like "overs*" Or s Like "intl*" Or s Like "international*" Or s Like "export*" Or s Like "ต่างประเทศ*" Then
+        JobKind = 1
+    ElseIf s Like "domes*" Or s Like "local*" Or s Like "ในประเทศ*" Then
+        JobKind = 2
+    End If
 End Function
 
 Private Function ColLetter(ByVal c As Long) As String

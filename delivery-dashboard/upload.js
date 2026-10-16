@@ -36,7 +36,7 @@
 
   // โหมดต่างประเทศ : ปรับหัวข้อ / จำนวนรูป / ส่วนรถเข้า-รถออก (WH)
   function applyMode() {
-    const info = SB.intlInfo(task.vehicleType), intl = !!info, wh = intl && DEPT === 'WH';
+    const info = SB.taskIntl(task), intl = !!info, wh = intl && DEPT === 'WH';
     [cfg.max, cfg.maxMB] = intl ? LIMIT.INTL : LIMIT[DEPT];
     MAX = cfg.max; picker.redraw();
     show('intlTag', intl);
@@ -119,7 +119,7 @@
   $('sendBtn').onclick = async () => {
     if (needIn) return DF.say('กรุณาส่งรูปรถเข้า (หัวข้อ 2) ก่อน');
     if (!picker.items.length) return DF.say('กรุณาแนบรูปส่งงานอย่างน้อย 1 รูป');
-    const first = DEPT === 'WH' && task && SB.intlInfo(task.vehicleType) && !logOf('depart');
+    const first = DEPT === 'WH' && task && SB.taskIntl(task) && !logOf('depart');
     $('sendBtn').disabled = true;
     if (await send({ form: FORM, note: $('note').value.trim() }, [picker], first ? 'บันทึกรูปส่งงานและเวลารถออกเรียบร้อย (จบงาน)' : `บันทึกรูปส่งงานจาก ${DEPT} เรียบร้อย`)) $('note').value = '';
     $('sendBtn').disabled = !task;

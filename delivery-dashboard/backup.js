@@ -135,8 +135,8 @@
     return loadXlsx.p;
   }
   // หัวตารางเหมือนไฟล์ Backup ของบอต (และชีตใน Excel macro)
-  const PLAN_KEYS = 'task_code,date,detail,client,transport,schedule,arr1,arr2,arr3,company,vehicle_type,plate,driver,phone,round,stop1,map1,rec1,stop2,map2,rec2,stop3,map3,rec3,status'.split(',');
-  const PLAN_HEADS = ('Task Code|Date|Detail|Client Name|Transport|Schedule|Arrival Time 1|Arrival Time 2|Arrival Time 3|ชื่อบริษัทขนส่ง|ประเภทรถ|ทะเบียนรถ|ชื่อผู้ขับ|เบอร์โทรผู้ขับ|รอบขนส่ง|' +
+  const PLAN_KEYS = 'task_code,date,detail,client,job_type,transport,schedule,arr1,arr2,arr3,company,vehicle_type,plate,driver,phone,round,stop1,map1,rec1,stop2,map2,rec2,stop3,map3,rec3,status'.split(',');
+  const PLAN_HEADS = ('Task Code|Date|Detail|Client Name|Type|Transport|Schedule|Arrival Time 1|Arrival Time 2|Arrival Time 3|ชื่อบริษัทขนส่ง|ประเภทรถ|ทะเบียนรถ|ชื่อผู้ขับ|เบอร์โทรผู้ขับ|รอบขนส่ง|' +
     'จุดที่ 1|Map1|ชื่อ-เบอร์โทรผู้รับ จุดที่ 1|จุดที่ 2|Map2|ชื่อ-เบอร์โทรผู้รับ จุดที่ 2|จุดที่ 3|Map3|ชื่อ-เบอร์โทรผู้รับ จุดที่ 3|Task Status|Synced|สถานะใน Backup').split('|');
   const PICKUP_HEADS = ['Timestamp', 'วันที่งาน', 'Task Code', 'ชื่อบริษัทขนส่ง', 'ทะเบียนรถ', 'ชื่อผู้ขับ', 'หมายเหตุ', 'จำนวนรูป', 'โฟลเดอร์รูปในเครื่อง', 'ที่มา (คน/GPS)', 'ID', 'ฝ่าย (WH/QA)'];
   const ROAD_HEADS = ['Timestamp', 'วันที่งาน', 'Task Code', 'ประเภท', 'จุดที่', 'ชื่อจุดส่ง', 'ทะเบียนรถ', 'ทะเบียนเดิม (ถ้าแก้ไข)', 'หมายเหตุ', 'คาดว่าจะถึงจุดที่ 1', 'คาดว่าจะถึงจุดที่ 2', 'คาดว่าจะถึงจุดที่ 3',

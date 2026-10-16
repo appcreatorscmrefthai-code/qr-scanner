@@ -52,7 +52,7 @@ td.cx{color:#ffb3bd}
 </header>
 <main>
   <ol class="how">
-    <li>ใน Excel (หรือ Google Sheet) เลือกแถวแผนที่ต้องการ <b>ให้ครบทุกคอลัมน์ A ถึง Y</b> (Task Code ถึง Task Status) แล้วกด Ctrl+C จะรวมแถวหัวตารางมาด้วยหรือไม่ก็ได้</li>
+    <li>ใน Excel (หรือ Google Sheet) เลือกแถวแผนที่ต้องการ <b>ให้ครบทุกคอลัมน์ A ถึง Z</b> (Task Code ถึง Task Status ; คอลัมน์ E = Type : domestic / oversea) แล้วกด Ctrl+C จะรวมแถวหัวตารางมาด้วยหรือไม่ก็ได้</li>
     <li>คลิกในช่องด้านล่าง แล้วกด Ctrl+V ระบบจะตรวจข้อมูลและแสดงตัวอย่างให้ดูก่อน</li>
     <li>ตรวจตัวอย่างแล้วกด <b>นำเข้า</b> งานที่ Task Code ซ้ำกับในระบบจะถูก<b>แทนที่ด้วยข้อมูลใหม่</b> (QR เดิมยังใช้ได้) งานที่ยังไม่มีจะถูกเพิ่ม</li>
   </ol>
@@ -65,17 +65,18 @@ td.cx{color:#ffb3bd}
   </div>
   <div class="wrap" id="wrap" hidden><table id="tbl"></table></div>
 </main>
-<script src="config.js?v=18"></script>
-<script src="api.js?v=18"></script>
-<script src="auth.js?v=18"></script>
+<script src="config.js?v=21"></script>
+<script src="api.js?v=21"></script>
+<script src="auth.js?v=21"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// ลำดับคอลัมน์ A-Y ของชีต Plan
-const COLS = ['task_code', 'date', 'detail', 'client', 'transport', 'schedule', 'arr1', 'arr2', 'arr3', 'company', 'vehicle_type', 'plate', 'driver', 'phone', 'round',
+// ลำดับคอลัมน์ A-Z ของชีต Plan (s20 : E = Type) ; ไฟล์รุ่นเก่าที่ยังไม่มีคอลัมน์ Type (A-Y) ก็วางได้
+const COLS = ['task_code', 'date', 'detail', 'client', 'job_type', 'transport', 'schedule', 'arr1', 'arr2', 'arr3', 'company', 'vehicle_type', 'plate', 'driver', 'phone', 'round',
   'stop1', 'map1', 'rec1', 'stop2', 'map2', 'rec2', 'stop3', 'map3', 'rec3', 'status'];
 const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
   'ม.ค.': 1, 'ก.พ.': 2, 'มี.ค.': 3, 'เม.ย.': 4, 'พ.ค.': 5, 'มิ.ย.': 6, 'ก.ค.': 7, 'ส.ค.': 8, 'ก.ย.': 9, 'ต.ค.': 10, 'พ.ย.': 11, 'ธ.ค.': 12 };
+const COLS_OLD = COLS.filter(c => c !== 'job_type');
 const pad = n => String(n).padStart(2, '0');
 let rows = [];
 
@@ -123,11 +124,14 @@ const clean = v => { const s = String(v ?? '').replace(/\s+/g, ' ').trim(); retu
 
 function check() {
   const grid = parseTsv($('paste').value);
-  if (grid.length && /task\s*code/i.test(grid[0][0] || '')) grid.shift();          // ตัดแถวหัวตาราง
+  let hdrType = null;
+  if (grid.length && /task\s*code/i.test(grid[0][0] || '')) hdrType = /^type$/i.test(String(grid.shift()[4] || '').trim());   // ตัดแถวหัวตาราง (E = Type ไหม)
   const seen = {};
   rows = grid.map(r => {
     const o = {}, bad = [];
-    COLS.forEach((c, i) => { o[c] = clean(r[i]); });
+    const nw = hdrType !== null ? hdrType : (/^(domes|overs|ในประเทศ|ต่างประเทศ)/i.test(String(r[4] || '').trim()) || r.length >= 26);
+    (nw ? COLS : COLS_OLD).forEach((c, i) => { o[c] = clean(r[i]); });
+    if (nw) o.job_type = o.job_type.toLowerCase(); else delete o.job_type;
     if (!o.task_code) bad.push('ไม่มี Task Code');
     else if (seen[o.task_code.toUpperCase()]) bad.push('Task Code ซ้ำในชุดที่วาง');
     seen[(o.task_code || '').toUpperCase()] = true;
@@ -137,7 +141,7 @@ function check() {
       const t = toTime(o[c]);
       if (t === null) bad.push(`${k ? 'Arrival Time ' + k : 'Schedule'} ไม่ใช่เวลา (${o[c]})`); else o[c] = t;
     });
-    if (r.length < 15) bad.push(`คอลัมน์ไม่ครบ (มี ${r.length} จาก 25)`);
+    if (r.length < 15) bad.push(`คอลัมน์ไม่ครบ (มี ${r.length} จาก ${nw ? 26 : 25})`);
     return { o, bad };
   });
   draw();
@@ -145,8 +149,8 @@ function check() {
 function draw() {
   const bad = rows.filter(r => r.bad.length).length, ok = rows.length - bad;
   $('wrap').hidden = !rows.length;
-  $('tbl').innerHTML = rows.length ? `<tr><th>#</th><th>Task Code</th><th>Date</th><th>Schedule</th><th>LN Num</th><th>ประเภทรถ</th><th>ทะเบียน</th><th>รอบ</th><th>จุดที่ 1</th><th>จุดที่ 2</th><th>จุดที่ 3</th><th>Task Status</th><th>ปัญหา</th></tr>` +
-    rows.map((r, i) => { const o = r.o; return `<tr class="${r.bad.length ? 'bad' : ''}"><td>${i + 1}</td><td>${esc(o.task_code)}</td><td>${esc(o.date)}</td><td>${esc(o.schedule)}</td><td>${esc(o.client)}</td><td>${esc(o.vehicle_type)}</td><td>${esc(o.plate)}</td><td>${esc(o.round)}</td>
+  $('tbl').innerHTML = rows.length ? `<tr><th>#</th><th>Task Code</th><th>Date</th><th>Schedule</th><th>LN Num</th><th>Type</th><th>ประเภทรถ</th><th>ทะเบียน</th><th>รอบ</th><th>จุดที่ 1</th><th>จุดที่ 2</th><th>จุดที่ 3</th><th>Task Status</th><th>ปัญหา</th></tr>` +
+    rows.map((r, i) => { const o = r.o; return `<tr class="${r.bad.length ? 'bad' : ''}"><td>${i + 1}</td><td>${esc(o.task_code)}</td><td>${esc(o.date)}</td><td>${esc(o.schedule)}</td><td>${esc(o.client)}</td><td>${esc(o.job_type || '')}</td><td>${esc(o.vehicle_type)}</td><td>${esc(o.plate)}</td><td>${esc(o.round)}</td>
       <td title="${esc(o.stop1)}">${esc(o.arr1)} ${esc(o.stop1)}</td><td title="${esc(o.stop2)}">${esc(o.arr2)} ${esc(o.stop2)}</td><td title="${esc(o.stop3)}">${esc(o.arr3)} ${esc(o.stop3)}</td>
       <td class="${/cancel|ยกเลิก/i.test(o.status) ? 'cx' : ''}">${esc(o.status)}</td><td class="issue">${esc(r.bad.join(' · '))}</td></tr>`; }).join('') : '';
   const edit = Auth.canEdit();
